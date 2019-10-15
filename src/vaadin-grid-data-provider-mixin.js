@@ -324,6 +324,8 @@ export const DataProviderMixin = superClass => class DataProviderMixin extends s
 
           this._increasePoolIfNeeded(0);
         }
+
+        this.__setInitialColumnWidths();
       });
     }
   }

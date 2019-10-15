@@ -63,8 +63,40 @@ export const ScrollMixin = superClass => class ScrollMixin extends superClass {
 
   static get observers() {
     return [
-      '_scrollHeightUpdated(_estScrollHeight)'
+      '_scrollHeightUpdated(_estScrollHeight)',
+      '_scrollViewportHeightUpdated(_viewportHeight)'
     ];
+  }
+
+  // Override (from iron-scroll-target-behavior) to avoid document scroll
+  set _scrollTop(top) {
+    this.$.table.scrollTop = top;
+  }
+
+  get _scrollTop() {
+    return this.$.table.scrollTop;
+  }
+
+  constructor() {
+    super();
+    this._scrollLineHeight = this._getScrollLineHeight();
+  }
+
+  /**
+   * @returns {Number|undefined} - The browser's default font-size in pixels
+   */
+  _getScrollLineHeight() {
+    const el = document.createElement('div');
+    el.style.fontSize = 'initial';
+    el.style.display = 'none';
+    document.body.appendChild(el);
+    const fontSize = window.getComputedStyle(el).fontSize;
+    document.body.removeChild(el);
+    return fontSize ? window.parseInt(fontSize) : undefined;
+  }
+
+  _scrollViewportHeightUpdated(_viewportHeight) {
+    this._scrollPageHeight = _viewportHeight - this.$.header.clientHeight - this.$.footer.clientHeight - this._scrollLineHeight;
   }
 
   ready() {
@@ -99,12 +131,15 @@ export const ScrollMixin = superClass => class ScrollMixin extends superClass {
       return;
     }
 
-    var table = this.$.table;
+    const table = this.$.table;
 
-    var deltaY = e.deltaY;
-    if (e.deltaMode === 1) {
-      // Mode 1 == scrolling by lines instead of pixels
-      deltaY *= this._physicalAverage;
+    let deltaY = e.deltaY;
+    if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) {
+      // Scrolling by "lines of text" instead of pixels
+      deltaY *= this._scrollLineHeight;
+    } else if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) {
+      // Scrolling by "pages" instead of pixels
+      deltaY *= this._scrollPageHeight;
     }
 
     if (this._wheelAnimationFrame) {
@@ -154,7 +189,8 @@ export const ScrollMixin = superClass => class ScrollMixin extends superClass {
   _hasScrolledAncestor(el, deltaX, deltaY) {
     if (el.localName === 'vaadin-grid-cell-content') {
       return false;
-    } else if (this._canScroll(el, deltaX, deltaY)) {
+    } else if (this._canScroll(el, deltaX, deltaY)
+      && ['auto', 'scroll'].indexOf(getComputedStyle(el).overflow) !== -1) {
       return true;
     } else if (el !== this && el.parentElement) {
       return this._hasScrolledAncestor(el.parentElement, deltaX, deltaY);

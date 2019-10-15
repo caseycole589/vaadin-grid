@@ -91,6 +91,7 @@ export const RowDetailsMixin = superClass => class RowDetailsMixin extends super
     Array.from(this.$.items.children).forEach(row => {
       this._toggleDetailsCell(row, row._item);
       this._a11yUpdateRowDetailsOpened(row, this._isDetailsOpened(row._item));
+      this._toggleAttribute('details-opened', this._isDetailsOpened(row._item), row);
     });
   }
 

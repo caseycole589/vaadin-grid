@@ -21,7 +21,6 @@ import { html } from '@polymer/polymer/lib/utils/html-tag.js';
  * ```
  *
  * @memberof Vaadin
- * @extends Vaadin.GridColumnElement
  */
 class GridSortColumnElement extends GridColumnElement {
   static get template() {

@@ -159,7 +159,7 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
   }
 
   _groupResizableChanged(resizable, rootColumns) {
-    if (rootColumns === undefined) {
+    if (resizable === undefined || rootColumns === undefined) {
       return;
     }
 

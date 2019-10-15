@@ -31,7 +31,6 @@ import { html } from '@polymer/polymer/lib/utils/html-tag.js';
  * __The default content can also be overridden__
  *
  * @memberof Vaadin
- * @extends Vaadin.GridColumnElement
  */
 class GridSelectionColumnElement extends GridColumnElement {
   static get template() {

@@ -20,6 +20,7 @@ import { ScrollMixin } from './vaadin-grid-scroll-mixin.js';
 import { SelectionMixin } from './vaadin-grid-selection-mixin.js';
 import { SortMixin } from './vaadin-grid-sort-mixin.js';
 import { StylingMixin } from './vaadin-grid-styling-mixin.js';
+import { DragAndDropMixin } from './vaadin-grid-drag-and-drop-mixin.js';
 import { KeyboardNavigationMixin } from './vaadin-grid-keyboard-navigation-mixin.js';
 import { ColumnReorderingMixin } from './vaadin-grid-column-reordering-mixin.js';
 import './vaadin-grid-column.js';
@@ -29,7 +30,7 @@ import { ElementMixin } from '@vaadin/vaadin-element-mixin/vaadin-element-mixin.
 import { html } from '@polymer/polymer/lib/utils/html-tag.js';
 import { beforeNextRender, afterNextRender } from '@polymer/polymer/lib/utils/render-status.js';
 import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
-import { timeOut } from '@polymer/polymer/lib/utils/async.js';
+import { timeOut, animationFrame } from '@polymer/polymer/lib/utils/async.js';
 
 const TOUCH_DEVICE = (() => {
   try {
@@ -234,6 +235,8 @@ const TOUCH_DEVICE = (() => {
  * `navigating` | Keyboard navigation in navigation mode | :host
  * `overflow` | Set when rows are overflowing the grid viewport. Possible values: `top`, `bottom`, `left`, `right` | :host
  * `reordering` | Set when the grid's columns are being reordered | :host
+ * `dragover` | Set when the grid (not a specific row) is dragged over | :host
+ * `dragging-rows` : Set when grid rows are dragged  | :host
  * `reorder-status` | Reflects the status of a cell while columns are being reordered | cell
  * `frozen` | Frozen cell | cell
  * `last-frozen` | Last frozen cell | cell
@@ -241,9 +244,14 @@ const TOUCH_DEVICE = (() => {
  * `last-column` | Last visible cell on a row | cell
  * `selected` | Selected row | row
  * `expanded` | Expanded row | row
+ * `details-opened` | Row with details open | row
  * `loading` | Row that is waiting for data from data provider | row
  * `odd` | Odd row | row
  * `first` | The first body row | row
+ * `dragstart` | Set for one frame when drag of a row is starting. The value is a number when multiple rows are dragged | row
+ * `dragover` | Set when the row is dragged over | row
+ * `drag-disabled` | Set to a row that isn't available for dragging | row
+ * `drop-disabled` | Set to a row that can't be dropped on top of | row
  *
  * See [ThemableMixin – how to apply styles for shadow parts](https://github.com/vaadin/vaadin-themable-mixin/wiki)
  *
@@ -264,6 +272,7 @@ const TOUCH_DEVICE = (() => {
  * @mixes Vaadin.Grid.ColumnReorderingMixin
  * @mixes Vaadin.Grid.EventContextMixin
  * @mixes Vaadin.Grid.StylingMixin
+ * @mixes Vaadin.Grid.DragAndDropMixin
  * @demo demo/index.html
  */
 class GridElement extends
@@ -283,8 +292,9 @@ class GridElement extends
                             ColumnReorderingMixin(
                               ColumnResizingMixin(
                                 EventContextMixin(
-                                  StylingMixin(
-                                    ScrollerElement))))))))))))))))) {
+                                  DragAndDropMixin(
+                                    StylingMixin(
+                                      ScrollerElement)))))))))))))))))) {
   static get template() {
     return html`
     <style include="vaadin-grid-styles"></style>
@@ -316,7 +326,7 @@ class GridElement extends
   }
 
   static get version() {
-    return '5.3.2';
+    return '5.4.11';
   }
 
   static get observers() {
@@ -385,6 +395,60 @@ class GridElement extends
   constructor() {
     super();
     this.addEventListener('animationend', this._onAnimationEnd);
+  }
+
+  __hasRowsWithClientHeight() {
+    return !!Array.from(this.$.items.children).filter(row => row.clientHeight).length;
+  }
+
+  __setInitialColumnWidths() {
+    if (!this._initialColumnWidthsSet && this.__hasRowsWithClientHeight()) {
+      this._initialColumnWidthsSet = true;
+      this.recalculateColumnWidths();
+    }
+  }
+
+  /**
+   * @param {Array<Vaadin.GridColumnElement>} cols the columns to auto size based on their content width
+   */
+  _recalculateColumnWidths(cols) {
+    // Note: The `cols.forEach()` loops below could be implemented as a single loop but this has been
+    // split for performance reasons to batch these similar actions [write/read] together to avoid
+    // unnecessary layout trashing.
+
+    // [write] Set automatic width for all cells (breaks column alignment)
+    cols.forEach(col => {
+      col.width = 'auto';
+      col._origFlexGrow = col.flexGrow;
+      col.flexGrow = 0;
+    });
+    // [read] Measure max cell width in each column
+    cols.forEach(col => {
+      col._currentWidth = 0;
+      // Note: _allCells only contains cells which are currently rendered in DOM
+      col._allCells.forEach(c => {
+        const cellWidth = Math.ceil(c.getBoundingClientRect().width);
+        col._currentWidth = Math.max(col._currentWidth, cellWidth);
+      });
+    });
+    // [write] Set column widths to fit widest measured content
+    cols.forEach(col => {
+      col.width = `${col._currentWidth}px`;
+      col.flexGrow = col._origFlexGrow;
+      col._currentWidth = undefined;
+      col._origFlexGrow = undefined;
+    });
+  }
+
+  /**
+   * Updates the `width` of all columns which have `autoWidth` set to `true`.
+   */
+  recalculateColumnWidths() {
+    if (!this._columnTree) {
+      return; // No columns
+    }
+    const cols = this._getColumns().filter(col => !col.hidden && col.autoWidth);
+    this._recalculateColumnWidths(cols);
   }
 
   _createScrollerRows(count) {
@@ -642,6 +706,7 @@ class GridElement extends
       this._toggleDetailsCell(row, item);
     }
     this._generateCellClassNames(row, model);
+    this._filterDragAndDrop(row, model);
 
     Array.from(row.children).forEach(cell => {
       if (cell._renderer) {
@@ -693,6 +758,7 @@ class GridElement extends
       this._updateHeaderFooterMetrics();
       e.stopPropagation();
       this.notifyResize();
+      this.__setInitialColumnWidths();
     }
   }
 
@@ -748,6 +814,15 @@ class GridElement extends
     if (value || oldValue) {
       this.notifyResize();
     }
+  }
+
+  __forceReflow() {
+    this._debouncerForceReflow = Debouncer.debounce(this._debouncerForceReflow,
+      animationFrame, () => {
+        this.$.scroller.style.overflow = 'hidden';
+        setTimeout(() => this.$.scroller.style.overflow = '');
+      }
+    );
   }
 }
 

@@ -233,7 +233,8 @@ VaadinGridStyles.appendChild(
     [last-column] [part~="resize-handle"]::before,
     [last-frozen] [part~="resize-handle"]::before {
       width: 18px;
-      transform: translateX(-100%);
+      transform: none;
+      right: 0;
     }
 
     #scroller[column-resizing] {
@@ -325,6 +326,10 @@ if (safari || firefox) {
 
     [ios][scrolling] #outerscroller {
       z-index: 0;
+    }
+
+    [ios] [frozen] {
+      will-change: auto;
     }
   `;
   VaadinGridStyles.querySelector('template').content.appendChild(scrollingStyles);

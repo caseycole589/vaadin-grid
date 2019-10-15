@@ -5,7 +5,7 @@ This program is available under Apache License Version 2.0, available at https:/
 */
 import { afterNextRender } from '@polymer/polymer/lib/utils/render-status.js';
 
-import { idlePeriod, animationFrame } from '@polymer/polymer/lib/utils/async.js';
+import { animationFrame } from '@polymer/polymer/lib/utils/async.js';
 import { flush } from '@polymer/polymer/lib/utils/flush.js';
 import { PolymerIronList } from './iron-list.js';
 import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
@@ -177,7 +177,7 @@ class GridScrollerElement extends PolymerIronList {
     } else if (this._optPhysicalSize !== Infinity) {
       this._debounceIncreasePool = Debouncer.debounce(
         this._debounceIncreasePool,
-        idlePeriod,
+        animationFrame,
         () => {
           this._updateMetrics();
           const remainingPhysicalSize = this._optPhysicalSize - this._physicalSize;

@@ -1,28 +1,28 @@
 {
-  "_from": "@vaadin/vaadin-grid@5.3.2",
-  "_id": "@vaadin/vaadin-grid@5.3.2",
+  "_from": "@vaadin/vaadin-grid@5.4.11",
+  "_id": "@vaadin/vaadin-grid@5.4.11",
   "_inBundle": false,
-  "_integrity": "sha512-9CCOczX/qV6gL1DKzMDJ7ePrusXk1O6MaTr2NdV2V6sdB1aJICQLMN2KhjtZo7jAP5WUpxK3jRIb4HXajYKd7g==",
+  "_integrity": "sha512-uh4P8qCCDaKWMQS66Cttr5TtOsbWdsFqbq8/hyXCfGwvQScKPiH7chS+G0gdnHYD5/aH2f083N6admwiu6DF2w==",
   "_location": "/@vaadin/vaadin-grid",
   "_phantomChildren": {},
   "_requested": {
     "type": "version",
     "registry": true,
-    "raw": "@vaadin/vaadin-grid@5.3.2",
+    "raw": "@vaadin/vaadin-grid@5.4.11",
     "name": "@vaadin/vaadin-grid",
     "escapedName": "@vaadin%2fvaadin-grid",
     "scope": "@vaadin",
-    "rawSpec": "5.3.2",
+    "rawSpec": "5.4.11",
     "saveSpec": null,
-    "fetchSpec": "5.3.2"
+    "fetchSpec": "5.4.11"
   },
   "_requiredBy": [
     "#USER",
     "/"
   ],
-  "_resolved": "https://registry.npmjs.org/@vaadin/vaadin-grid/-/vaadin-grid-5.3.2.tgz",
-  "_shasum": "b2d627fd9b4abeaee17fbcebf9decbcd13407b4d",
-  "_spec": "@vaadin/vaadin-grid@5.3.2",
+  "_resolved": "https://registry.npmjs.org/@vaadin/vaadin-grid/-/vaadin-grid-5.4.11.tgz",
+  "_shasum": "961ea8cf81451548aeca3b8bbe3a38c1613de517",
+  "_spec": "@vaadin/vaadin-grid@5.4.11",
   "_where": "C:\\Users\\ccole.CAPS\\Desktop\\CompositeHub",
   "author": {
     "name": "Vaadin Ltd"
@@ -50,7 +50,6 @@
     "@polymer/app-localize-behavior": "^3.0.0",
     "@polymer/iron-ajax": "^3.0.0",
     "@polymer/iron-component-page": "^4.0.0",
-    "@polymer/iron-demo-helpers": "^3.0.0",
     "@polymer/iron-flex-layout": "^3.0.0",
     "@polymer/iron-image": "^3.0.0",
     "@polymer/iron-list": "^3.0.0",
@@ -61,7 +60,7 @@
     "@polymer/paper-slider": "^3.0.0",
     "@vaadin/vaadin-button": "^2.1.0",
     "@vaadin/vaadin-context-menu": "^4.3.1",
-    "@vaadin/vaadin-demo-helpers": "^2.0.2",
+    "@vaadin/vaadin-demo-helpers": "^3.0.0",
     "@webcomponents/webcomponentsjs": "^2.0.0",
     "wct-browser-legacy": "^1.0.1"
   },
@@ -98,5 +97,5 @@
     "supports-color": "3.1.2",
     "type-detect": "1.0.0"
   },
-  "version": "5.3.2"
+  "version": "5.4.11"
 }

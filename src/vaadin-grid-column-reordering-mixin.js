@@ -174,6 +174,16 @@ export const ColumnReorderingMixin = superClass => class ColumnReorderingMixin e
     this._draggedColumn = null;
     this._lastDragClientX = null;
     this._reorderGhost.style.visibility = 'hidden';
+
+    this.dispatchEvent(new CustomEvent('column-reorder', {detail: {
+      columns: this._getColumnsInOrder()
+    }}));
+  }
+
+  _getColumnsInOrder() {
+    return this._columnTree.slice(0).pop()
+      .filter(c => !c.hidden)
+      .sort((b, a) => (b._order - a._order));
   }
 
   _cellFromPoint(x, y) {
@@ -314,4 +324,11 @@ export const ColumnReorderingMixin = superClass => class ColumnReorderingMixin e
     }
   }
 
+  /**
+   * Fired when the columns in the grid are reordered.
+   *
+   * @event column-reorder
+   * @param {Object} detail
+   * @param {Object} detail.columns the columns in the new order
+   */
 };

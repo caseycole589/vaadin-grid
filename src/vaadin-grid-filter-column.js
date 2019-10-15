@@ -21,14 +21,13 @@ import { html } from '@polymer/polymer/lib/utils/html-tag.js';
  * ```
  *
  * @memberof Vaadin
- * @extends Vaadin.GridColumnElement
  */
 class GridFilterColumnElement extends GridColumnElement {
   static get template() {
     return html`
     <template class="header" id="headerTemplate">
       <vaadin-grid-filter path="[[path]]" value="[[_filterValue]]">
-        <vaadin-text-field theme="small" focus-target="" style="max-width: 100%" slot="filter" value="{{_filterValue}}" label="[[_getHeader(header, path)]]"></vaadin-text-field>
+        <vaadin-text-field theme="small" focus-target="" style="max-width: 100%;" slot="filter" value="{{_filterValue}}" label="[[_getHeader(header, path)]]"></vaadin-text-field>
       </vaadin-grid-filter>
     </template>
 `;

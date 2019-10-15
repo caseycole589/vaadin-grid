@@ -17,7 +17,7 @@ export const StylingMixin = superClass => class StylingMixin extends superClass 
        * characters.
        *
        * Receives two arguments:
-       * - `column` The `<vaadin-grid-column>` element.
+       * - `column` The `<vaadin-grid-column>` element (`undefined` for details-cell).
        * - `rowData` The object with the properties related with
        *   the rendered item, contains:
        *   - `rowData.index` The index of the item.

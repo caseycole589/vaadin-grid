@@ -266,9 +266,9 @@ export const PolymerIronList = Class({
     return this._viewportHeight === 0 ? Infinity : this._viewportHeight * this._maxPages;
   },
 
- /**
-  * True if the current list is visible.
-  */
+  /**
+   * True if the current list is visible.
+   */
   get _isVisible() {
     return Boolean(this.offsetWidth || this.offsetHeight);
   },
@@ -308,8 +308,7 @@ export const PolymerIronList = Class({
     var idx = this._lastVisibleIndexVal;
     if (idx == null) {
       if (this.grid) {
-        idx = Math.min(this._virtualCount,
-            this.firstVisibleIndex + this._estRowsInView * this._itemsPerRow - 1);
+        idx = Math.min(this._virtualCount, this.firstVisibleIndex + this._estRowsInView * this._itemsPerRow - 1);
       } else {
         var physicalOffset = this._physicalTop + this._scrollOffset;
         this._iterateItems(function(pidx, vidx) {
@@ -347,8 +346,7 @@ export const PolymerIronList = Class({
    */
   updateViewportBoundaries: function() {
     var styles = window.getComputedStyle(this);
-    this._scrollerPaddingTop = this.scrollTarget === this ? 0 :
-        parseInt(styles['padding-top'], 10);
+    this._scrollerPaddingTop = this.scrollTarget === this ? 0 : parseInt(styles['padding-top'], 10);
     this._isRTL = Boolean(styles.direction === 'rtl');
     this._viewportWidth = this.$.items.offsetWidth;
     this._viewportHeight = this._scrollTargetHeight;
@@ -398,7 +396,7 @@ export const PolymerIronList = Class({
    * @param {boolean} fromTop If the potential reusable items are above the scrolling region.
    */
   _getReusables: function(fromTop) {
-    var ith, lastIth, offsetContent, physicalItemHeight;
+    var ith, offsetContent, physicalItemHeight;
     var idxs = [];
     var protectedOffsetContent = this._hiddenContentSize * this._ratio;
     var virtualStart = this._virtualStart;
@@ -411,13 +409,12 @@ export const PolymerIronList = Class({
 
     if (fromTop) {
       ith = this._physicalStart;
-      lastIth = this._physicalEnd;
       offsetContent = scrollTop - top;
     } else {
       ith = this._physicalEnd;
-      lastIth = this._physicalStart;
       offsetContent = bottom - scrollBottom;
     }
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       physicalItemHeight = this._getPhysicalSizeIncrement(ith);
       offsetContent = offsetContent - physicalItemHeight;
@@ -450,7 +447,7 @@ export const PolymerIronList = Class({
         ith = (ith === 0) ? physicalCount - 1 : ith - 1;
       }
     }
-    return { indexes: idxs, physicalTop: top - this._scrollOffset };
+    return {indexes: idxs, physicalTop: top - this._scrollOffset};
   },
 
   /**
@@ -477,7 +474,7 @@ export const PolymerIronList = Class({
   },
 
   _isClientFull: function() {
-    return this._scrollBottom != 0 && this._physicalBottom-1 >= this._scrollBottom &&
+    return this._scrollBottom != 0 && this._physicalBottom - 1 >= this._scrollBottom &&
         this._physicalTop <= this._scrollPosition;
   },
 
@@ -486,7 +483,7 @@ export const PolymerIronList = Class({
    */
   _increasePoolIfNeeded: function(count) {
     var nextPhysicalCount = this._clamp(this._physicalCount + count,
-        DEFAULT_PHYSICAL_COUNT, this._virtualCount - this._virtualStart);
+      DEFAULT_PHYSICAL_COUNT, this._virtualCount - this._virtualStart);
     nextPhysicalCount = this._convertIndexToCompleteRow(nextPhysicalCount);
     var delta = nextPhysicalCount - this._physicalCount;
     var nextIncrease = Math.round(this._physicalCount * 0.5);
@@ -569,7 +566,7 @@ export const PolymerIronList = Class({
       this._physicalTop = 0;
       this._virtualCount = this.items ? this.items.length : 0;
       this._collection = this.items && undefined ?
-          undefined.get(this.items) : null;
+        undefined.get(this.items) : null;
       this._physicalIndexForKey = {};
       this._firstVisibleIndexVal = null;
       this._lastVisibleIndexVal = null;
@@ -658,15 +655,17 @@ export const PolymerIronList = Class({
       this._updateGridMetrics();
       this._physicalSize = Math.ceil(this._physicalCount / this._itemsPerRow) * this._rowHeight;
     } else {
-      oldPhysicalSize = (this._itemsPerRow === 1) ? oldPhysicalSize :  Math.ceil(this._physicalCount / this._itemsPerRow) * this._rowHeight;
+      oldPhysicalSize = (this._itemsPerRow === 1) ?
+        oldPhysicalSize :
+        Math.ceil(this._physicalCount / this._itemsPerRow) * this._rowHeight;
       this._physicalSize = this._physicalSize + newPhysicalSize - oldPhysicalSize;
       this._itemsPerRow = 1;
     }
     // Update the average if it measured something.
     if (this._physicalAverageCount !== prevAvgCount) {
       this._physicalAverage = Math.round(
-          ((prevPhysicalAvg * prevAvgCount) + newPhysicalSize) /
-          this._physicalAverageCount);
+        ((prevPhysicalAvg * prevAvgCount) + newPhysicalSize) /
+        this._physicalAverageCount);
     }
   },
 
@@ -698,8 +697,7 @@ export const PolymerIronList = Class({
    * Adjusts the scroll position when it was overestimated.
    */
   _adjustScrollPosition: function() {
-    var deltaHeight = this._virtualStart === 0 ? this._physicalTop :
-        Math.min(this._scrollPosition + this._physicalTop, 0);
+    var deltaHeight = this._virtualStart === 0 ? this._physicalTop : Math.min(this._scrollPosition + this._physicalTop, 0);
     // Note: the delta can be positive or negative.
     if (deltaHeight !== 0) {
       this._physicalTop = this._physicalTop - deltaHeight;
@@ -759,7 +757,7 @@ export const PolymerIronList = Class({
     if (this._physicalCount === 0) {
       return;
     }
-    idx = this._clamp(idx, 0, this._virtualCount-1);
+    idx = this._clamp(idx, 0, this._virtualCount - 1);
     // Update the virtual start only when needed.
     if (!this._isIndexRendered(idx) || idx >= this._maxVirtualStart) {
       this._virtualStart = this.grid ? (idx - this._itemsPerRow * 2) : (idx - 1);
@@ -768,7 +766,7 @@ export const PolymerIronList = Class({
     this._assignModels();
     this._updateMetrics();
     // Estimate new physical offset.
-    this._physicalTop = Math.floor(this._virtualStart / this._itemsPerRow)  * this._physicalAverage;
+    this._physicalTop = Math.floor(this._virtualStart / this._itemsPerRow) * this._physicalAverage;
 
     var currentTopItem = this._physicalStart;
     var currentVirtualItem = this._virtualStart;
@@ -807,7 +805,6 @@ export const PolymerIronList = Class({
       this._firstVisibleIndexVal = null;
       this._lastVisibleIndexVal = null;
       // Skip the resize event on touch devices when the address bar slides up.
-      var delta = Math.abs(this._viewportHeight - this._scrollTargetHeight);
       this.updateViewportBoundaries();
       if (this._isVisible) {
         // Reinstall the scroll event listener.
