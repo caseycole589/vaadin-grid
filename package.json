@@ -1,29 +1,29 @@
 {
-  "_from": "@vaadin/vaadin-grid@5.4.11",
-  "_id": "@vaadin/vaadin-grid@5.4.11",
+  "_from": "@vaadin/vaadin-grid",
+  "_id": "@vaadin/vaadin-grid@5.5.0",
   "_inBundle": false,
-  "_integrity": "sha512-uh4P8qCCDaKWMQS66Cttr5TtOsbWdsFqbq8/hyXCfGwvQScKPiH7chS+G0gdnHYD5/aH2f083N6admwiu6DF2w==",
+  "_integrity": "sha512-QQ7NdP8ug8xh3WrTQTP+CB1HCPVjr462Zrnk2uCD4G8Wdw9KTzw9avuauwlMm9pv/CrsP19x5hJS+bmqYSJd5A==",
   "_location": "/@vaadin/vaadin-grid",
   "_phantomChildren": {},
   "_requested": {
-    "type": "version",
+    "type": "tag",
     "registry": true,
-    "raw": "@vaadin/vaadin-grid@5.4.11",
+    "raw": "@vaadin/vaadin-grid",
     "name": "@vaadin/vaadin-grid",
     "escapedName": "@vaadin%2fvaadin-grid",
     "scope": "@vaadin",
-    "rawSpec": "5.4.11",
+    "rawSpec": "",
     "saveSpec": null,
-    "fetchSpec": "5.4.11"
+    "fetchSpec": "latest"
   },
   "_requiredBy": [
     "#USER",
     "/"
   ],
-  "_resolved": "https://registry.npmjs.org/@vaadin/vaadin-grid/-/vaadin-grid-5.4.11.tgz",
-  "_shasum": "961ea8cf81451548aeca3b8bbe3a38c1613de517",
-  "_spec": "@vaadin/vaadin-grid@5.4.11",
-  "_where": "C:\\Users\\ccole.CAPS\\Desktop\\CompositeHub",
+  "_resolved": "https://registry.npmjs.org/@vaadin/vaadin-grid/-/vaadin-grid-5.5.0.tgz",
+  "_shasum": "3c10055925db6dd2404287c0199893a959f8eaad",
+  "_spec": "@vaadin/vaadin-grid",
+  "_where": "C:\\Users\\ccole.CAPS\\Desktop\\vaadin-grid-master",
   "author": {
     "name": "Vaadin Ltd"
   },
@@ -97,5 +97,5 @@
     "supports-color": "3.1.2",
     "type-detect": "1.0.0"
   },
-  "version": "5.4.11"
+  "version": "5.5.0"
 }
