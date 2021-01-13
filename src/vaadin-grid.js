@@ -24,11 +24,10 @@ import { DragAndDropMixin } from './vaadin-grid-drag-and-drop-mixin.js';
 import { KeyboardNavigationMixin } from './vaadin-grid-keyboard-navigation-mixin.js';
 import { ColumnReorderingMixin } from './vaadin-grid-column-reordering-mixin.js';
 import './vaadin-grid-column.js';
-import './vaadin-grid-outer-scroller.js';
 import './vaadin-grid-styles.js';
 import { ElementMixin } from '@vaadin/vaadin-element-mixin/vaadin-element-mixin.js';
 import { html } from '@polymer/polymer/lib/utils/html-tag.js';
-import { beforeNextRender, afterNextRender } from '@polymer/polymer/lib/utils/render-status.js';
+import { beforeNextRender } from '@polymer/polymer/lib/utils/render-status.js';
 import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
 import { timeOut, animationFrame } from '@polymer/polymer/lib/utils/async.js';
 
@@ -66,13 +65,13 @@ const TOUCH_DEVICE = (() => {
  * For custom content `vaadin-grid-column` element provides you with three types of `renderer` callback functions: `headerRenderer`,
  * `renderer` and `footerRenderer`.
  *
- * Each of those renderer functions provides `root`, `column`, `rowData` arguments when applicable.
+ * Each of those renderer functions provides `root`, `column`, `model` arguments when applicable.
  * Generate DOM content, append it to the `root` element and control the state
  * of the host element by accessing `column`. Before generating new content,
  * users are able to check if there is already content in `root` for reusing it.
  *
  * Renderers are called on initialization of new column cells and each time the
- * related row data is updated. DOM generated during the renderer call can be reused
+ * related row model is updated. DOM generated during the renderer call can be reused
  * in the next renderer call and will be provided with the `root` argument.
  * On first call it will be empty.
  *
@@ -94,22 +93,22 @@ const TOUCH_DEVICE = (() => {
  * columns[0].headerRenderer = function(root) {
  *   root.textContent = 'Name';
  * };
- * columns[0].renderer = function(root, column, rowData) {
- *   root.textContent = rowData.item.name;
+ * columns[0].renderer = function(root, column, model) {
+ *   root.textContent = model.item.name;
  * };
  *
  * columns[1].headerRenderer = function(root) {
  *   root.textContent = 'Surname';
  * };
- * columns[1].renderer = function(root, column, rowData) {
- *   root.textContent = rowData.item.surname;
+ * columns[1].renderer = function(root, column, model) {
+ *   root.textContent = model.item.surname;
  * };
  *
  * columns[2].headerRenderer = function(root) {
  *   root.textContent = 'Role';
  * };
- * columns[2].renderer = function(root, column, rowData) {
- *   root.textContent = rowData.item.role;
+ * columns[2].renderer = function(root, column, model) {
+ *   root.textContent = model.item.role;
  * };
  * ```
  *
@@ -255,24 +254,24 @@ const TOUCH_DEVICE = (() => {
  *
  * See [ThemableMixin – how to apply styles for shadow parts](https://github.com/vaadin/vaadin-themable-mixin/wiki)
  *
- * @memberof Vaadin
- * @mixes Vaadin.ThemableMixin
- * @mixes Vaadin.Grid.A11yMixin
- * @mixes Vaadin.Grid.ActiveItemMixin
- * @mixes Vaadin.Grid.ArrayDataProviderMixin
- * @mixes Vaadin.Grid.ColumnResizingMixin
- * @mixes Vaadin.Grid.DataProviderMixin
- * @mixes Vaadin.Grid.DynamicColumnsMixin
- * @mixes Vaadin.Grid.FilterMixin
- * @mixes Vaadin.Grid.RowDetailsMixin
- * @mixes Vaadin.Grid.ScrollMixin
- * @mixes Vaadin.Grid.SelectionMixin
- * @mixes Vaadin.Grid.SortMixin
- * @mixes Vaadin.Grid.KeyboardNavigationMixin
- * @mixes Vaadin.Grid.ColumnReorderingMixin
- * @mixes Vaadin.Grid.EventContextMixin
- * @mixes Vaadin.Grid.StylingMixin
- * @mixes Vaadin.Grid.DragAndDropMixin
+ * @extends ScrollerElement
+ * @mixes ThemableMixin
+ * @mixes A11yMixin
+ * @mixes ActiveItemMixin
+ * @mixes ArrayDataProviderMixin
+ * @mixes ColumnResizingMixin
+ * @mixes DataProviderMixin
+ * @mixes DynamicColumnsMixin
+ * @mixes FilterMixin
+ * @mixes RowDetailsMixin
+ * @mixes ScrollMixin
+ * @mixes SelectionMixin
+ * @mixes SortMixin
+ * @mixes KeyboardNavigationMixin
+ * @mixes ColumnReorderingMixin
+ * @mixes EventContextMixin
+ * @mixes StylingMixin
+ * @mixes DragAndDropMixin
  * @demo demo/index.html
  */
 class GridElement extends
@@ -299,19 +298,16 @@ class GridElement extends
     return html`
     <style include="vaadin-grid-styles"></style>
 
-    <div id="scroller" no-scrollbars\$="[[!_scrollbarWidth]]" wheel-scrolling\$="[[_wheelScrolling]]" safari\$="[[_safari]]" ios\$="[[_ios]]" loading\$="[[loading]]" edge\$="[[_edge]]" firefox\$="[[_firefox]]" ie\$="[[_ie]]" column-reordering-allowed\$="[[columnReorderingAllowed]]">
+    <div id="scroller" safari\$="[[_safari]]" ios\$="[[_ios]]" ie\$="[[_ie]]" loading\$="[[loading]]" column-reordering-allowed\$="[[columnReorderingAllowed]]">
 
       <table id="table" role="grid" aria-multiselectable="true" tabindex="0">
-        <caption id="fixedsizer" class="sizer" part="row"></caption>
+        <caption id="sizer" part="row"></caption>
         <thead id="header" role="rowgroup"></thead>
         <tbody id="items" role="rowgroup"></tbody>
         <tfoot id="footer" role="rowgroup"></tfoot>
       </table>
 
       <div part="reorder-ghost"></div>
-      <vaadin-grid-outer-scroller id="outerscroller" _touch-device="[[_touchDevice]]" scroll-target="[[scrollTarget]]" scroll-handler="[[_this]]" no-scrollbars="[[!_scrollbarWidth]]">
-        <div id="outersizer" class="sizer" part="row"></div>
-      </vaadin-grid-outer-scroller>
     </div>
 
     <!-- The template needs at least one slot or else shady doesn't distribute -->
@@ -326,7 +322,7 @@ class GridElement extends
   }
 
   static get version() {
-    return '5.5.0';
+    return '5.7.7';
   }
 
   static get observers() {
@@ -337,58 +333,68 @@ class GridElement extends
 
   static get properties() {
     return {
-
-      _this: {
-        type: Object,
-        value: function() {
-          return this;
-        }
-      },
-
+      /** @private */
       _safari: {
         type: Boolean,
         value: /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
       },
 
+      /** @private */
       _ios: {
         type: Boolean,
         value: (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream)
           || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
       },
 
+      /** @private */
       _edge: {
         type: Boolean,
         value: typeof CSS !== 'undefined' && CSS.supports('(-ms-ime-align:auto)')
       },
 
+      /** @private */
       _ie: {
         type: Boolean,
         value: !!(navigator.userAgent.match(/Trident/) && !navigator.userAgent.match(/MSIE/))
       },
 
+      /** @private */
       _firefox: {
         type: Boolean,
         value: navigator.userAgent.toLowerCase().indexOf('firefox') > -1
       },
 
+      /** @private */
       _android: {
         type: Boolean,
         value: /android/i.test(navigator.userAgent)
       },
 
+      /** @private */
       _touchDevice: {
         type: Boolean,
         value: TOUCH_DEVICE
       },
 
       /**
-       * If true, the grid's height is defined by the number of its rows.
+       * If true, the grid's height is defined by its rows.
+       *
+       * Effectively, this disables the grid's virtual scrolling so that all the rows are rendered in the DOM at once.
+       * If the grid has a large number of items, using the feature is discouraged to avoid performance issues.
+       * @attr {boolean} height-by-rows
+       * @type {boolean}
        */
       heightByRows: {
         type: Boolean,
         value: false,
         reflectToAttribute: true,
         observer: '_heightByRowsChanged'
+      },
+
+      /** @private */
+      _recalculateColumnWidthOnceLoadingFinished: {
+        type: Boolean,
+        value: true
       }
     };
   }
@@ -398,19 +404,44 @@ class GridElement extends
     this.addEventListener('animationend', this._onAnimationEnd);
   }
 
+  /** @protected */
+  connectedCallback() {
+    super.connectedCallback();
+    this.recalculateColumnWidths();
+  }
+
+  /**
+   * @param {string} name
+   * @param {?string} oldValue
+   * @param {?string} newValue
+   * @protected
+   */
+  attributeChangedCallback(name, oldValue, newValue) {
+    super.attributeChangedCallback(name, oldValue, newValue);
+    if (name === 'dir') {
+      this.__isRTL = newValue === 'rtl';
+      this._updateScrollerMeasurements();
+    }
+  }
+
+  /** @private */
   __hasRowsWithClientHeight() {
     return !!Array.from(this.$.items.children).filter(row => row.clientHeight).length;
   }
 
-  __setInitialColumnWidths() {
-    if (!this._initialColumnWidthsSet && this.__hasRowsWithClientHeight()) {
-      this._initialColumnWidthsSet = true;
+  /** @protected */
+  __itemsReceived() {
+    if (this._recalculateColumnWidthOnceLoadingFinished
+      && !this._cache.isLoading()
+      && this.__hasRowsWithClientHeight()) {
+      this._recalculateColumnWidthOnceLoadingFinished = false;
       this.recalculateColumnWidths();
     }
   }
 
   /**
-   * @param {Array<Vaadin.GridColumnElement>} cols the columns to auto size based on their content width
+   * @param {!Array<!GridColumnElement>} cols the columns to auto size based on their content width
+   * @private
    */
   _recalculateColumnWidths(cols) {
     // Note: The `cols.forEach()` loops below could be implemented as a single loop but this has been
@@ -428,7 +459,8 @@ class GridElement extends
       col._currentWidth = 0;
       // Note: _allCells only contains cells which are currently rendered in DOM
       col._allCells.forEach(c => {
-        const cellWidth = Math.ceil(c.getBoundingClientRect().width);
+        // Add 1px buffer to the offset width to avoid too narrow columns (sub-pixel rendering)
+        const cellWidth = c.offsetWidth + 1;
         col._currentWidth = Math.max(col._currentWidth, cellWidth);
       });
     });
@@ -448,10 +480,15 @@ class GridElement extends
     if (!this._columnTree) {
       return; // No columns
     }
-    const cols = this._getColumns().filter(col => !col.hidden && col.autoWidth);
-    this._recalculateColumnWidths(cols);
+    if (this._cache.isLoading()) {
+      this._recalculateColumnWidthOnceLoadingFinished = true;
+    } else {
+      const cols = this._getColumns().filter(col => !col.hidden && col.autoWidth);
+      this._recalculateColumnWidths(cols);
+    }
   }
 
+  /** @private */
   _createScrollerRows(count) {
     const rows = [];
     for (var i = 0; i < count; i++) {
@@ -475,10 +512,12 @@ class GridElement extends
     return rows;
   }
 
+  /** @private */
   _getRowTarget() {
     return this.$.items;
   }
 
+  /** @private */
   _createCell(tagName) {
     const contentId = this._contentIndex = this._contentIndex + 1 || 0;
     const slotName = 'vaadin-grid-cell-content-' + contentId;
@@ -526,6 +565,14 @@ class GridElement extends
     return cell;
   }
 
+  /**
+   * @param {!HTMLTableRowElement} row
+   * @param {!Array<!GridColumnElement>} columns
+   * @param {?string} section
+   * @param {boolean} isColumnRow
+   * @param {boolean} noNotify
+   * @protected
+   */
   _updateRow(row, columns, section, isColumnRow, noNotify) {
     section = section || 'body';
 
@@ -533,69 +580,71 @@ class GridElement extends
 
     Array.from(row.children).forEach(cell => cell._vacant = true);
     row.innerHTML = '';
-    if (row.id !== 'outersizer' && row.id !== 'fixedsizer') {
+    if (row.id !== 'sizer') {
       row.hidden = true;
     }
-    columns.forEach((column, index) => {
-      let cell;
+    columns
+      .filter(column => !column.hidden)
+      .forEach((column, index, cols) => {
+        let cell;
 
-      if (section === 'body') {
+        if (section === 'body') {
         // Body
-        column._cells = column._cells || [];
-        cell = column._cells.filter(cell => cell._vacant)[0];
-        if (!cell) {
-          cell = this._createCell('td');
-          column._cells.push(cell);
-        }
-        cell.setAttribute('part', 'cell body-cell');
-        row.appendChild(cell);
+          column._cells = column._cells || [];
+          cell = column._cells.filter(cell => cell._vacant)[0];
+          if (!cell) {
+            cell = this._createCell('td');
+            column._cells.push(cell);
+          }
+          cell.setAttribute('part', 'cell body-cell');
+          row.appendChild(cell);
 
-        if (index === columns.length - 1 && (this._rowDetailsTemplate || this.rowDetailsRenderer)) {
+          if (index === cols.length - 1 && (this._rowDetailsTemplate || this.rowDetailsRenderer)) {
           // Add details cell as last cell to body rows
-          this._detailsCells = this._detailsCells || [];
-          const detailsCell = this._detailsCells.filter(cell => cell._vacant)[0] || this._createCell('td');
-          if (this._detailsCells.indexOf(detailsCell) === -1) {
-            this._detailsCells.push(detailsCell);
+            this._detailsCells = this._detailsCells || [];
+            const detailsCell = this._detailsCells.filter(cell => cell._vacant)[0] || this._createCell('td');
+            if (this._detailsCells.indexOf(detailsCell) === -1) {
+              this._detailsCells.push(detailsCell);
+            }
+            if (!detailsCell._content.parentElement) {
+              contentsFragment.appendChild(detailsCell._content);
+            }
+            this._configureDetailsCell(detailsCell);
+            row.appendChild(detailsCell);
+            this._a11ySetRowDetailsCell(row, detailsCell);
+            detailsCell._vacant = false;
           }
-          if (!detailsCell._content.parentElement) {
-            contentsFragment.appendChild(detailsCell._content);
-          }
-          this._configureDetailsCell(detailsCell);
-          row.appendChild(detailsCell);
-          this._a11ySetRowDetailsCell(row, detailsCell);
-          detailsCell._vacant = false;
-        }
 
-        if (column.notifyPath && !noNotify) {
-          column.notifyPath('_cells.*', column._cells);
-        }
-      } else {
-        // Header & footer
-        const tagName = section === 'header' ? 'th' : 'td';
-        if (isColumnRow || column.localName === 'vaadin-grid-column-group') {
-          cell = column[`_${section}Cell`] || this._createCell(tagName);
-          cell._column = column;
-          row.appendChild(cell);
-          column[`_${section}Cell`] = cell;
+          if (column.notifyPath && !noNotify) {
+            column.notifyPath('_cells.*', column._cells);
+          }
         } else {
-          column._emptyCells = column._emptyCells || [];
-          cell = column._emptyCells.filter(cell => cell._vacant)[0] || this._createCell(tagName);
-          cell._column = column;
-          row.appendChild(cell);
-          if (column._emptyCells.indexOf(cell) === -1) {
-            column._emptyCells.push(cell);
+        // Header & footer
+          const tagName = section === 'header' ? 'th' : 'td';
+          if (isColumnRow || column.localName === 'vaadin-grid-column-group') {
+            cell = column[`_${section}Cell`] || this._createCell(tagName);
+            cell._column = column;
+            row.appendChild(cell);
+            column[`_${section}Cell`] = cell;
+          } else {
+            column._emptyCells = column._emptyCells || [];
+            cell = column._emptyCells.filter(cell => cell._vacant)[0] || this._createCell(tagName);
+            cell._column = column;
+            row.appendChild(cell);
+            if (column._emptyCells.indexOf(cell) === -1) {
+              column._emptyCells.push(cell);
+            }
           }
+          cell.setAttribute('part', `cell ${section}-cell`);
+          this.__updateHeaderFooterRowVisibility(row);
         }
-        cell.setAttribute('part', `cell ${section}-cell`);
-        this.__updateHeaderFooterRowVisibility(row);
-      }
 
-      if (!cell._content.parentElement) {
-        contentsFragment.appendChild(cell._content);
-      }
-      cell._vacant = false;
-      cell._column = column;
-    });
+        if (!cell._content.parentElement) {
+          contentsFragment.appendChild(cell._content);
+        }
+        cell._vacant = false;
+        cell._column = column;
+      });
 
     // Might be empty if only cache was used
     this.appendChild(contentsFragment);
@@ -604,6 +653,10 @@ class GridElement extends
     this._updateFirstAndLastColumnForRow(row);
   }
 
+  /**
+   * @param {HTMLTableRowElement} row
+   * @protected
+   */
   __updateHeaderFooterRowVisibility(row) {
     if (!row) {
       return;
@@ -645,6 +698,7 @@ class GridElement extends
     }
   }
 
+  /** @private */
   _updateScrollerItem(row, index) {
     this._preventScrollerRotatingCellFocus(row, index);
 
@@ -658,8 +712,18 @@ class GridElement extends
     this._getItem(index, row);
   }
 
+  /** @private */
   _columnTreeChanged(columnTree, splices) {
-    Array.from(this.$.items.children).forEach(row => this._updateRow(row, columnTree[columnTree.length - 1]));
+    this._renderColumnTree(columnTree);
+    this.recalculateColumnWidths();
+  }
+
+  /**
+   * @param {!Array<!GridColumnElement>} columnTree
+   * @protected
+   */
+  _renderColumnTree(columnTree) {
+    Array.from(this.$.items.children).forEach((row) => this._updateRow(row, columnTree[columnTree.length - 1], null, false, true));
 
     while (this.$.header.children.length < columnTree.length) {
       const headerRow = document.createElement('tr');
@@ -684,8 +748,7 @@ class GridElement extends
       .forEach((footerRow, index) => this._updateRow(footerRow, columnTree[columnTree.length - 1 - index], 'footer', index === 0));
 
     // Sizer rows
-    this._updateRow(this.$.outersizer, columnTree[columnTree.length - 1]);
-    this._updateRow(this.$.fixedsizer, columnTree[columnTree.length - 1]);
+    this._updateRow(this.$.sizer, columnTree[columnTree.length - 1]);
 
     this._resizeHandler();
     this._frozenCellsChanged();
@@ -693,8 +756,37 @@ class GridElement extends
     this._resetKeyboardNavigation();
     this._a11yUpdateHeaderRows();
     this._a11yUpdateFooterRows();
+    this.__updateFooterPositioning();
   }
 
+  __updateFooterPositioning() {
+    if (this._firefox) {
+      // Sticky (or translated) footer in a flexbox host doesn't get included in
+      // the scroll height calculation on FF. This is a workaround for the issue.
+      this.$.items.style.paddingBottom = 0;
+      if (!this.heightByRows) {
+        this.$.items.style.paddingBottom = `${this.$.footer.offsetHeight}px`;
+      }
+    }
+
+    if (this._ios) {
+      const isOldIOS = !window.CSS.supports('position', 'sticky');
+      if (isOldIOS) {
+        // Due to a rendering bug, the sticky header may disappear on an older iOS (10-12) Safari
+        // if the grid is used inside of a flex box. This is a workaround for the issue.
+        this.$.table.style.height = '';
+        this.$.table.style.minHeight = '100%';
+        this.$.table.style.maxHeight = '100%';
+        setTimeout(() => this.$.table.style.height = `${this.$.scroller.offsetHeight}px`);
+      }
+    }
+  }
+
+  /**
+   * @param {!HTMLElement} row
+   * @param {GridItem} item
+   * @protected
+   */
   _updateItem(row, item) {
     row._item = item;
     const model = this.__getRowModel(row);
@@ -731,38 +823,37 @@ class GridElement extends
     );
   }
 
+  /** @private */
   _resizeHandler() {
     this._updateDetailsCellHeights();
     this._accessIronListAPI(super._resizeHandler, true);
-    this._updateHeaderFooterMetrics();
+    this._updateScrollerMeasurements();
+    this.__updateFooterPositioning();
   }
 
-  _updateHeaderFooterMetrics() {
-    const headerHeight = this.$.header.clientHeight + 'px';
-    const footerHeight = this.$.footer.clientHeight + 'px';
-    [this.$.outersizer, this.$.fixedsizer, this.$.items].forEach(element => {
-      element.style.borderTopWidth = headerHeight;
-      element.style.borderBottomWidth = footerHeight;
-    });
-
-    afterNextRender(this.$.header, () => {
-      if (this._pendingScrollToIndex) {
-        this._scrollToIndex(this._pendingScrollToIndex);
-      }
-    });
-  }
-
+  /** @private */
   _onAnimationEnd(e) {
     // ShadyCSS applies scoping suffixes to animation names
     if (e.animationName.indexOf('vaadin-grid-appear') === 0) {
       this._render();
-      this._updateHeaderFooterMetrics();
       e.stopPropagation();
       this.notifyResize();
-      this.__setInitialColumnWidths();
+      this.__itemsReceived();
+
+      requestAnimationFrame(() => {
+        this.__scrollToPendingIndex();
+        // This needs to be set programmatically in order to avoid an iOS 10 bug (disappearing grid)
+        this.$.table.style.webkitOverflowScrolling = 'touch';
+      });
     }
   }
 
+  /**
+   * @param {string} name
+   * @param {boolean} bool
+   * @param {!Element} node
+   * @protected
+   */
   _toggleAttribute(name, bool, node) {
     if (node.hasAttribute(name) === !bool) {
       if (bool) {
@@ -773,6 +864,11 @@ class GridElement extends
     }
   }
 
+  /**
+   * @param {!HTMLTableRowElement} row
+   * @return {!GridItemModel}
+   * @protected
+   */
   __getRowModel(row) {
     return {
       index: row.index,
@@ -811,12 +907,14 @@ class GridElement extends
     super.notifyResize();
   }
 
+  /** @private */
   _heightByRowsChanged(value, oldValue) {
     if (value || oldValue) {
       this.notifyResize();
     }
   }
 
+  /** @protected */
   __forceReflow() {
     this._debouncerForceReflow = Debouncer.debounce(this._debouncerForceReflow,
       animationFrame, () => {

@@ -7,6 +7,7 @@ import '@polymer/polymer/polymer-legacy.js';
 
 import '@polymer/polymer/lib/elements/custom-style.js';
 import { ThemableMixin } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
+import { DirMixin } from '@vaadin/vaadin-element-mixin/vaadin-dir-mixin.js';
 import { html } from '@polymer/polymer/lib/utils/html-tag.js';
 import { PolymerElement } from '@polymer/polymer/polymer-element.js';
 const $_documentContainer = document.createElement('template');
@@ -53,9 +54,9 @@ document.head.appendChild($_documentContainer.content);
  * -------------|-------------|------------
  * `direction` | Sort direction of a sorter | :host
  *
- * @memberof Vaadin
+ * @extends PolymerElement
  */
-class GridSorterElement extends ThemableMixin(PolymerElement) {
+class GridSorterElement extends ThemableMixin(DirMixin(PolymerElement)) {
   static get template() {
     return html`
     <style>
@@ -82,6 +83,7 @@ class GridSorterElement extends ThemableMixin(PolymerElement) {
 
       [part="indicators"]::before {
         font-family: 'vaadin-grid-sorter-icons';
+        display: inline-block;
       }
 
       :host(:not([direction])) [part="indicators"]::before {
@@ -121,6 +123,7 @@ class GridSorterElement extends ThemableMixin(PolymerElement) {
        * How to sort the data.
        * Possible values are `asc` to use an ascending algorithm, `desc` to sort the data in
        * descending direction, or `null` for not sorting the data.
+       * @type {GridSorterDirection | undefined}
        */
       direction: {
         type: String,
@@ -129,11 +132,16 @@ class GridSorterElement extends ThemableMixin(PolymerElement) {
         value: null
       },
 
+      /**
+       * @type {number | null}
+       * @protected
+       */
       _order: {
         type: Number,
         value: null
       },
 
+      /** @private */
       _isConnected: {
         type: Boolean,
         value: false
@@ -148,6 +156,7 @@ class GridSorterElement extends ThemableMixin(PolymerElement) {
     ];
   }
 
+  /** @protected */
   ready() {
     super.ready();
     this.addEventListener('click', this._onClick.bind(this));
@@ -165,6 +174,7 @@ class GridSorterElement extends ThemableMixin(PolymerElement) {
     this._isConnected = false;
   }
 
+  /** @private */
   _pathOrDirectionChanged(path, direction, isConnected) {
     if (path === undefined || direction === undefined || isConnected === undefined) {
       return;
@@ -175,10 +185,12 @@ class GridSorterElement extends ThemableMixin(PolymerElement) {
     }
   }
 
+  /** @private */
   _getDisplayOrder(order) {
     return order === null ? '' : order + 1;
   }
 
+  /** @private */
   _onClick(e) {
     const activeElement = this.getRootNode().activeElement;
     if (this !== activeElement && this.contains(activeElement)) {
@@ -196,6 +208,7 @@ class GridSorterElement extends ThemableMixin(PolymerElement) {
     }
   }
 
+  /** @private */
   _directionOrOrderChanged(direction, order) {
     if (direction === undefined || order === undefined) {
       return;

@@ -8,7 +8,9 @@ import { PolymerElement } from '@polymer/polymer/polymer-element.js';
 import '@polymer/polymer/lib/elements/custom-style.js';
 import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
 import { ThemableMixin } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
+import { DirMixin } from '@vaadin/vaadin-element-mixin/vaadin-dir-mixin.js';
 import { html } from '@polymer/polymer/lib/utils/html-tag.js';
+import { isFocusable } from './vaadin-grid-active-item-mixin.js';
 import { microTask } from '@polymer/polymer/lib/utils/async.js';
 const $_documentContainer = document.createElement('template');
 
@@ -65,10 +67,10 @@ document.head.appendChild($_documentContainer.content);
  * ---|---|---
  * `--vaadin-grid-tree-toggle-level-offset` | Visual offset step for each tree sublevel | `1em`
  *
- * @memberof Vaadin
- * @mixes Vaadin.ThemableMixin
+ * @extends PolymerElement
+ * @mixes ThemableMixin
  */
-class GridTreeToggleElement extends ThemableMixin(PolymerElement) {
+class GridTreeToggleElement extends ThemableMixin(DirMixin(PolymerElement)) {
   static get template() {
     return html`
     <style>
@@ -141,6 +143,7 @@ class GridTreeToggleElement extends ThemableMixin(PolymerElement) {
       /**
        * Current level of the tree represented with a horizontal offset
        * of the toggle button.
+       * @type {number}
        */
       level: {
         type: Number,
@@ -150,6 +153,7 @@ class GridTreeToggleElement extends ThemableMixin(PolymerElement) {
 
       /**
        * Hides the toggle icon and disables toggling a tree sublevel.
+       * @type {boolean}
        */
       leaf: {
         type: Boolean,
@@ -159,6 +163,7 @@ class GridTreeToggleElement extends ThemableMixin(PolymerElement) {
 
       /**
        * Sublevel toggle state.
+       * @type {boolean}
        */
       expanded: {
         type: Boolean,
@@ -169,14 +174,19 @@ class GridTreeToggleElement extends ThemableMixin(PolymerElement) {
     };
   }
 
+  /** @protected */
   ready() {
     super.ready();
 
     this.addEventListener('click', e => this._onClick(e));
   }
 
+  /** @private */
   _onClick(e) {
     if (this.leaf) {
+      return;
+    }
+    if (isFocusable(e.target)) {
       return;
     }
 
@@ -184,6 +194,7 @@ class GridTreeToggleElement extends ThemableMixin(PolymerElement) {
     this.expanded = !this.expanded;
   }
 
+  /** @private */
   _levelChanged(level) {
     const value = Number(level).toString();
     this.style['---level'] = value;

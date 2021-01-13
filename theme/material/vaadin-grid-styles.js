@@ -21,9 +21,6 @@ const $_documentContainer = html`<dom-module id="material-grid" theme-for="vaadi
       [part~="cell"] ::slotted(vaadin-grid-cell-content) {
         padding: 8px 16px;
       }
-      [part~="cell"]:not([part~="body-cell"]):hover  {
-       cursor: grab; 
-      }
 
       [part~="details-cell"] ::slotted(vaadin-grid-cell-content) {
         padding: 14px 16px;
@@ -98,8 +95,9 @@ const $_documentContainer = html`<dom-module id="material-grid" theme-for="vaadi
       :host([reordering]) [part~="cell"][reorder-status="allowed"] {
         background: var(--material-background-color);
       }
+
       :host([reordering]) [part~="cell"][reorder-status="dragging"] {
-        background:#eee;
+        background: var(--material-background-color);
       }
 
       /* Frozen columns */
@@ -213,6 +211,23 @@ const $_documentContainer = html`<dom-module id="material-grid" theme-for="vaadi
         font-size: var(--material-caption-font-size);
         text-align: center;
         line-height: 1;
+      }
+
+      /* RTL specific styles */
+
+      :host([dir="rtl"]) [part~="cell"][last-frozen] {
+        border-right: none;
+        border-left: 1px solid var(--material-divider-color);
+      }
+
+      :host([dir="rtl"]) [part~="cell"]:not([last-frozen]) [part="resize-handle"] {
+        border-right: none;
+        border-left: 1px solid var(--material-divider-color);
+      }
+
+      :host([dir="rtl"]) #scroller:not([ios]) [part~="row"][dragstart]:not([dragstart=""])::after {
+        left: auto;
+        right: var(--_grid-drag-start-x);
       }
     </style>
   </template>

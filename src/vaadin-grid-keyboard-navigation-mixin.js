@@ -9,27 +9,45 @@ This program is available under Apache License Version 2.0, available at https:/
 export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMixin extends superClass {
   static get properties() {
     return {
+      /** @private */
       _headerFocusable: {
         type: Object,
         observer: '_focusableChanged'
       },
+
+      /**
+       * @type {!HTMLElement | undefined}
+       * @protected
+       */
       _itemsFocusable: {
         type: Object,
         observer: '_focusableChanged'
       },
+
+      /** @private */
       _footerFocusable: {
         type: Object,
         observer: '_focusableChanged'
       },
+
+      /** @private */
       _navigatingIsHidden: Boolean,
+
+      /**
+       * @type {number}
+       * @protected
+       */
       _focusedItemIndex: {
         type: Number,
         value: 0
       },
+
+      /** @private */
       _focusedColumnOrder: Number
     };
   }
 
+  /** @protected */
   ready() {
     super.ready();
 
@@ -39,6 +57,8 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
 
     this.addEventListener('keydown', this._onKeyDown);
+    this.addEventListener('keyup', this._onKeyUp);
+
     this.addEventListener('focusin', this._onFocusIn);
     this.addEventListener('focusout', this._onFocusOut);
 
@@ -54,6 +74,7 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     this.addEventListener('mouseup', () => this._isMousedown = false);
   }
 
+  /** @private */
   _focusableChanged(focusable, oldFocusable) {
     if (oldFocusable) {
       oldFocusable.setAttribute('tabindex', '-1');
@@ -63,6 +84,10 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
   }
 
+  /**
+   * @param {!KeyboardEvent} e
+   * @protected
+   */
   _onKeyDown(e) {
     // Ensure standard key value, unified across browsers
     let key = e.key;
@@ -115,6 +140,7 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
   }
 
+  /** @private */
   _ensureScrolledToIndex(index) {
     const targetRowInDom = Array.from(this.$.items.children).filter(child => child.index === index)[0];
     if (!targetRowInDom) {
@@ -122,7 +148,10 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
   }
 
+  /** @private */
   _onNavigationKeyDown(e, key) {
+    this._scrollHandler();
+
     e.preventDefault();
 
     function indexOfChildElement(el) {
@@ -134,10 +163,10 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     let dx = 0, dy = 0;
     switch (key) {
       case 'ArrowRight':
-        dx = 1;
+        dx = this.__isRTL ? -1 : 1;
         break;
       case 'ArrowLeft':
-        dx = -1;
+        dx = this.__isRTL ? 1 : -1;
         break;
       case 'Home':
         dx = -Infinity;
@@ -224,15 +253,15 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
       if (isRowDetails) {
         this._focusedColumnOrder = 0;
       } else {
-        this._focusedColumnOrder = this._getColumns(activeRowGroup, rowIndex)[columnIndex]._order;
+        this._focusedColumnOrder = this._getColumns(activeRowGroup, rowIndex).filter(c => !c.hidden)[columnIndex]._order;
       }
     }
 
     // Find orderedColumnIndex — the index of order closest matching the
     // original _focusedColumnOrder in the sorted array of orders
     // of the visible columns on the destination row.
-    const dstColumns = this._getColumns(activeRowGroup, dstRowIndex);
-    const dstSortedColumnOrders = dstColumns.filter(c => !c.hidden).map(c => c._order)
+    const dstColumns = this._getColumns(activeRowGroup, dstRowIndex).filter(c => !c.hidden);
+    const dstSortedColumnOrders = dstColumns.map(c => c._order)
       .sort((b, a) => (b - a));
     const maxOrderedColumnIndex = dstSortedColumnOrders.length - 1;
     const orderedColumnIndex = dstSortedColumnOrders.indexOf(
@@ -256,7 +285,7 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
 
     // This has to be set after scrolling, otherwise it can be removed by
-    // `_preventScrollerRotatingCellFocus(item, index)` during scrolling.
+    // `_preventScrollerRotatingCellFocus(row, index)` during scrolling.
     this._toggleAttribute('navigating', true, this);
 
     const columnIndexByOrder = dstColumns.reduce((acc, col, i) => (acc[col._order] = i, acc), {});
@@ -299,6 +328,7 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     dstCell.focus();
   }
 
+  /** @private */
   _parseEventPath(path) {
     const tableIndex = path.indexOf(this.$.table);
     return {
@@ -308,6 +338,7 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     };
   }
 
+  /** @private */
   _onInteractionKeyDown(e, key) {
     const localTarget = e.composedPath()[0];
     const localTargetIsTextInput = localTarget.localName === 'input' &&
@@ -348,6 +379,7 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
   }
 
+  /** @private */
   _predictFocusStepTarget(srcElement, step) {
     const tabOrder = [
       this.$.table,
@@ -368,6 +400,7 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     return tabOrder[index];
   }
 
+  /** @private */
   _onTabKeyDown(e) {
     const focusTarget = this._predictFocusStepTarget(e.composedPath()[0], e.shiftKey ? -1 : 1);
 
@@ -402,7 +435,24 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     this._toggleAttribute('navigating', true, this);
   }
 
+  /** @private */
   _onSpaceKeyDown(e) {
+    e.preventDefault();
+
+    const cell = e.composedPath()[0];
+    if (!cell._content || !cell._content.firstElementChild) {
+      this.dispatchEvent(new CustomEvent('cell-activate', {detail: {
+        model: this.__getRowModel(cell.parentElement)
+      }}));
+    }
+  }
+
+  /** @private */
+  _onKeyUp(e) {
+    if (!/^( |SpaceBar)$/.test(e.key)) {
+      return;
+    }
+
     e.preventDefault();
 
     const cell = e.composedPath()[0];
@@ -410,13 +460,13 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
       const wasNavigating = this.hasAttribute('navigating');
       cell._content.firstElementChild.click();
       this._toggleAttribute('navigating', wasNavigating, this);
-    } else {
-      this.dispatchEvent(new CustomEvent('cell-activate', {detail: {
-        model: this.__getRowModel(cell.parentElement)
-      }}));
     }
   }
 
+  /**
+   * @param {!FocusEvent} e
+   * @protected
+   */
   _onFocusIn(e) {
     if (!this._isMousedown) {
       this._toggleAttribute('navigating', true, this);
@@ -439,11 +489,16 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
   }
 
+  /**
+   * @param {!FocusEvent} e
+   * @protected
+   */
   _onFocusOut(e) {
     this._toggleAttribute('navigating', false, this);
     this._detectInteracting(e);
   }
 
+  /** @private */
   _onCellFocusIn(e) {
     this._detectInteracting(e);
 
@@ -464,6 +519,7 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     this._detectFocusedItemIndex(e);
   }
 
+  /** @private */
   _onCellFocusOut(e) {
     if (e.composedPath().indexOf(this.$.table) === 3) {
       const cell = e.composedPath()[0];
@@ -472,12 +528,14 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
   }
 
+  /** @private */
   _detectInteracting(e) {
     this._toggleAttribute('interacting',
       e.composedPath().some(el => el.localName === 'vaadin-grid-cell-content'),
       this);
   }
 
+  /** @private */
   _detectFocusedItemIndex(e) {
     const {rowGroup, row} = this._parseEventPath(e.composedPath());
     if (rowGroup === this.$.items) {
@@ -485,8 +543,13 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
   }
 
-  _preventScrollerRotatingCellFocus(item, index) {
-    if (item.index === this._focusedItemIndex && this.hasAttribute('navigating') && this._activeRowGroup === this.$.items) {
+  /**
+   * @param {!HTMLTableRowElement} row
+   * @param {number} index
+   * @protected
+   */
+  _preventScrollerRotatingCellFocus(row, index) {
+    if (row.index === this._focusedItemIndex && this.hasAttribute('navigating') && this._activeRowGroup === this.$.items) {
       // Focused item has went, hide navigation mode
       this._navigatingIsHidden = true;
       this._toggleAttribute('navigating', false, this);
@@ -498,6 +561,12 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
   }
 
+  /**
+   * @param {HTMLTableSectionElement=} rowGroup
+   * @param {number=} rowIndex
+   * @return {!Array<!GridColumnElement>}
+   * @protected
+   */
   _getColumns(rowGroup, rowIndex) {
     let columnTreeLevel = this._columnTree.length - 1;
     if (rowGroup === this.$.header) {
@@ -508,6 +577,7 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     return this._columnTree[columnTreeLevel];
   }
 
+  /** @protected */
   _resetKeyboardNavigation() {
     if (this.$.header.firstElementChild) {
       this._headerFocusable = Array.from(this.$.header.firstElementChild.children).filter(el => !el.hidden)[0];
@@ -529,6 +599,10 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
   }
 
+  /**
+   * @param {!HTMLElement} dstCell
+   * @protected
+   */
   _scrollHorizontallyToCell(dstCell) {
     if (dstCell.hasAttribute('frozen') || this._elementMatches(dstCell, '[part~="details-cell"]')) {
       // These cells are, by design, always visible, no need to scroll.
@@ -571,6 +645,7 @@ export const KeyboardNavigationMixin = superClass => class KeyboardNavigationMix
     }
   }
 
+  /** @private */
   _elementMatches(el, query) {
     return el.matches ? el.matches(query) :
       Array.from(el.parentNode.querySelectorAll(query)).indexOf(el) !== -1;
