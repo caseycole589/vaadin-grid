@@ -343,7 +343,7 @@ export const DataProviderMixin = superClass => class DataProviderMixin extends s
         filters: this._mapFilters(),
         parentItem: cache.parentItem
       };
-
+      this._debounceIncreasePool && this._debounceIncreasePool.flush();
       this.dataProvider(params, (items, size) => {
         if (size !== undefined) {
           cache.size = size;
@@ -425,7 +425,7 @@ export const DataProviderMixin = superClass => class DataProviderMixin extends s
     this._hasData = false;
     this._assignModels();
 
-    if (!this._effectiveSize) {
+    if (!this._effectiveSize || !this._initialPoolCreated) {
       this._loadPage(0, this._cache);
     }
   }

@@ -322,7 +322,7 @@ class GridElement extends
   }
 
   static get version() {
-    return '5.7.7';
+    return '5.7.12';
   }
 
   static get observers() {
@@ -502,7 +502,9 @@ class GridElement extends
     }
 
     if (this._columnTree) {
-      this._columnTree[this._columnTree.length - 1].forEach(c => c.notifyPath && c.notifyPath('_cells.*', c._cells));
+      this._columnTree[this._columnTree.length - 1].forEach(
+        (c) => c.isConnected && c.notifyPath && c.notifyPath('_cells.*', c._cells)
+      );
     }
 
     beforeNextRender(this, () => {
