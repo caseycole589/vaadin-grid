@@ -135,7 +135,6 @@ export const ArrayDataProviderMixin = superClass =>
       if ([undefined, null].indexOf(value) >= 0) {
         return ""
       } else if (isNaN(value)) {
-        return value.toString()
         // its the dash date
         if (value.charCodeAt(2) === 47) {
           const temp = value.split("/")
