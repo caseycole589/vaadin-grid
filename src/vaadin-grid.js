@@ -1,10 +1,13 @@
 /**
-@license
-Copyright (c) 2017 Vaadin Ltd.
-This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
-*/
-import '@polymer/polymer/polymer-legacy.js';
-
+ * @license
+ * Copyright (c) 2020 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import { html } from '@polymer/polymer/lib/utils/html-tag.js';
+import { beforeNextRender } from '@polymer/polymer/lib/utils/render-status.js';
+import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
+import { timeOut, animationFrame } from '@polymer/polymer/lib/utils/async.js';
+import { ElementMixin } from '@vaadin/vaadin-element-mixin/vaadin-element-mixin.js';
 import { ThemableMixin } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
 import { ScrollerElement } from './vaadin-grid-scroller.js';
 import { A11yMixin } from './vaadin-grid-a11y-mixin.js';
@@ -25,11 +28,6 @@ import { KeyboardNavigationMixin } from './vaadin-grid-keyboard-navigation-mixin
 import { ColumnReorderingMixin } from './vaadin-grid-column-reordering-mixin.js';
 import './vaadin-grid-column.js';
 import './vaadin-grid-styles.js';
-import { ElementMixin } from '@vaadin/vaadin-element-mixin/vaadin-element-mixin.js';
-import { html } from '@polymer/polymer/lib/utils/html-tag.js';
-import { beforeNextRender } from '@polymer/polymer/lib/utils/render-status.js';
-import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
-import { timeOut, animationFrame } from '@polymer/polymer/lib/utils/async.js';
 
 const TOUCH_DEVICE = (() => {
   try {
@@ -41,7 +39,6 @@ const TOUCH_DEVICE = (() => {
 })();
 
 /**
- *
  * `<vaadin-grid>` is a free, high quality data grid / data table Web Component. The content of the
  * the grid can be populated in two ways: imperatively by using renderer callback function and
  * declaratively by using Polymer's Templates.
@@ -176,12 +173,12 @@ const TOUCH_DEVICE = (() => {
  *
  * ```javascript
  * grid.dataProvider = function(params, callback) {
- *   var url = 'https://api.example/data' +
+ *   const url = 'https://api.example/data' +
  *       '?page=' + params.page +        // the requested page index
  *       '&per_page=' + params.pageSize; // number of items on the page
- *   var xhr = new XMLHttpRequest();
+ *   const xhr = new XMLHttpRequest();
  *   xhr.onload = function() {
- *     var response = JSON.parse(xhr.responseText);
+ *     const response = JSON.parse(xhr.responseText);
  *     callback(
  *       response.employees, // requested page of items
  *       response.totalSize  // total number of items
@@ -197,12 +194,12 @@ const TOUCH_DEVICE = (() => {
  * ```javascript
  * grid.size = 200; // The total number of items
  * grid.dataProvider = function(params, callback) {
- *   var url = 'https://api.example/data' +
+ *   const url = 'https://api.example/data' +
  *       '?page=' + params.page +        // the requested page index
  *       '&per_page=' + params.pageSize; // number of items on the page
- *   var xhr = new XMLHttpRequest();
+ *   const xhr = new XMLHttpRequest();
  *   xhr.onload = function() {
- *     var response = JSON.parse(xhr.responseText);
+ *     const response = JSON.parse(xhr.responseText);
  *     callback(response.employees);
  *   };
  *   xhr.open('GET', url, true);
@@ -239,7 +236,7 @@ const TOUCH_DEVICE = (() => {
  * `reorder-status` | Reflects the status of a cell while columns are being reordered | cell
  * `frozen` | Frozen cell | cell
  * `last-frozen` | Last frozen cell | cell
-* * `first-column` | First visible cell on a row | cell
+ * * `first-column` | First visible cell on a row | cell
  * `last-column` | Last visible cell on a row | cell
  * `selected` | Selected row | row
  * `expanded` | Expanded row | row
@@ -254,7 +251,19 @@ const TOUCH_DEVICE = (() => {
  *
  * See [ThemableMixin – how to apply styles for shadow parts](https://github.com/vaadin/vaadin-themable-mixin/wiki)
  *
+ * @fires {CustomEvent} active-item-changed - Fired when the `activeItem` property changes.
+ * @fires {CustomEvent} cell-activate - Fired when the cell is activated with click or keyboard.
+ * @fires {CustomEvent} column-reorder - Fired when the columns in the grid are reordered.
+ * @fires {CustomEvent} column-resize - Fired when the grid column resize is finished.
+ * @fires {CustomEvent} expanded-items-changed - Fired when the `expandedItems` property changes.
+ * @fires {CustomEvent} grid-dragstart - Fired when starting to drag grid rows.
+ * @fires {CustomEvent} grid-dragend - Fired when the dragging of the rows ends.
+ * @fires {CustomEvent} grid-drop - Fired when a drop occurs on top of the grid.
+ * @fires {CustomEvent} loading-changed - Fired when the `loading` property changes.
+ * @fires {CustomEvent} selected-items-changed - Fired when the `selectedItems` property changes.
+ *
  * @extends ScrollerElement
+ * @mixes ElementMixin
  * @mixes ThemableMixin
  * @mixes A11yMixin
  * @mixes ActiveItemMixin
@@ -272,49 +281,57 @@ const TOUCH_DEVICE = (() => {
  * @mixes EventContextMixin
  * @mixes StylingMixin
  * @mixes DragAndDropMixin
- * @demo demo/index.html
  */
-class GridElement extends
-  ElementMixin(
-    ThemableMixin(
-      DataProviderMixin(
-        ArrayDataProviderMixin(
-          DynamicColumnsMixin(
-            ActiveItemMixin(
-              ScrollMixin(
-                SelectionMixin(
-                  SortMixin(
-                    RowDetailsMixin(
-                      KeyboardNavigationMixin(
-                        A11yMixin(
-                          FilterMixin(
-                            ColumnReorderingMixin(
-                              ColumnResizingMixin(
-                                EventContextMixin(
-                                  DragAndDropMixin(
-                                    StylingMixin(
-                                      ScrollerElement)))))))))))))))))) {
+class GridElement extends ElementMixin(
+  ThemableMixin(
+    DataProviderMixin(
+      ArrayDataProviderMixin(
+        DynamicColumnsMixin(
+          ActiveItemMixin(
+            ScrollMixin(
+              SelectionMixin(
+                SortMixin(
+                  RowDetailsMixin(
+                    KeyboardNavigationMixin(
+                      A11yMixin(
+                        FilterMixin(
+                          ColumnReorderingMixin(
+                            ColumnResizingMixin(EventContextMixin(DragAndDropMixin(StylingMixin(ScrollerElement))))
+                          )
+                        )
+                      )
+                    )
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
+  )
+) {
   static get template() {
     return html`
-    <style include="vaadin-grid-styles"></style>
+      <div
+        id="scroller"
+        safari$="[[_safari]]"
+        ios$="[[_ios]]"
+        loading$="[[loading]]"
+        column-reordering-allowed$="[[columnReorderingAllowed]]"
+      >
+        <table id="table" role="grid" aria-multiselectable="true" tabindex="0">
+          <caption id="sizer" part="row"></caption>
+          <thead id="header" role="rowgroup"></thead>
+          <tbody id="items" role="rowgroup"></tbody>
+          <tfoot id="footer" role="rowgroup"></tfoot>
+        </table>
 
-    <div id="scroller" safari\$="[[_safari]]" ios\$="[[_ios]]" ie\$="[[_ie]]" loading\$="[[loading]]" column-reordering-allowed\$="[[columnReorderingAllowed]]">
+        <div part="reorder-ghost"></div>
+      </div>
 
-      <table id="table" role="grid" aria-multiselectable="true" tabindex="0">
-        <caption id="sizer" part="row"></caption>
-        <thead id="header" role="rowgroup"></thead>
-        <tbody id="items" role="rowgroup"></tbody>
-        <tfoot id="footer" role="rowgroup"></tfoot>
-      </table>
-
-      <div part="reorder-ghost"></div>
-    </div>
-
-    <!-- The template needs at least one slot or else shady doesn't distribute -->
-    <slot name="nodistribute"></slot>
-
-    <div id="focusexit" tabindex="0"></div>
-`;
+      <div id="focusexit" tabindex="0"></div>
+    `;
   }
 
   static get is() {
@@ -322,13 +339,11 @@ class GridElement extends
   }
 
   static get version() {
-    return '5.7.12';
+    return '6.0.2';
   }
 
   static get observers() {
-    return [
-      '_columnTreeChanged(_columnTree, _columnTree.*)'
-    ];
+    return ['_columnTreeChanged(_columnTree, _columnTree.*)'];
   }
 
   static get properties() {
@@ -342,20 +357,9 @@ class GridElement extends
       /** @private */
       _ios: {
         type: Boolean,
-        value: (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream)
-          || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
-      },
-
-      /** @private */
-      _edge: {
-        type: Boolean,
-        value: typeof CSS !== 'undefined' && CSS.supports('(-ms-ime-align:auto)')
-      },
-
-      /** @private */
-      _ie: {
-        type: Boolean,
-        value: !!(navigator.userAgent.match(/Trident/) && !navigator.userAgent.match(/MSIE/))
+        value:
+          (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) ||
+          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
       },
 
       /** @private */
@@ -426,14 +430,16 @@ class GridElement extends
 
   /** @private */
   __hasRowsWithClientHeight() {
-    return !!Array.from(this.$.items.children).filter(row => row.clientHeight).length;
+    return !!Array.from(this.$.items.children).filter((row) => row.clientHeight).length;
   }
 
   /** @protected */
   __itemsReceived() {
-    if (this._recalculateColumnWidthOnceLoadingFinished
-      && !this._cache.isLoading()
-      && this.__hasRowsWithClientHeight()) {
+    if (
+      this._recalculateColumnWidthOnceLoadingFinished &&
+      !this._cache.isLoading() &&
+      this.__hasRowsWithClientHeight()
+    ) {
       this._recalculateColumnWidthOnceLoadingFinished = false;
       this.recalculateColumnWidths();
     }
@@ -449,23 +455,23 @@ class GridElement extends
     // unnecessary layout trashing.
 
     // [write] Set automatic width for all cells (breaks column alignment)
-    cols.forEach(col => {
+    cols.forEach((col) => {
       col.width = 'auto';
       col._origFlexGrow = col.flexGrow;
       col.flexGrow = 0;
     });
     // [read] Measure max cell width in each column
-    cols.forEach(col => {
+    cols.forEach((col) => {
       col._currentWidth = 0;
       // Note: _allCells only contains cells which are currently rendered in DOM
-      col._allCells.forEach(c => {
+      col._allCells.forEach((c) => {
         // Add 1px buffer to the offset width to avoid too narrow columns (sub-pixel rendering)
         const cellWidth = c.offsetWidth + 1;
         col._currentWidth = Math.max(col._currentWidth, cellWidth);
       });
     });
     // [write] Set column widths to fit widest measured content
-    cols.forEach(col => {
+    cols.forEach((col) => {
       col.width = `${col._currentWidth}px`;
       col.flexGrow = col._origFlexGrow;
       col._currentWidth = undefined;
@@ -483,7 +489,7 @@ class GridElement extends
     if (this._cache.isLoading()) {
       this._recalculateColumnWidthOnceLoadingFinished = true;
     } else {
-      const cols = this._getColumns().filter(col => !col.hidden && col.autoWidth);
+      const cols = this._getColumns().filter((col) => !col.hidden && col.autoWidth);
       this._recalculateColumnWidths(cols);
     }
   }
@@ -491,7 +497,7 @@ class GridElement extends
   /** @private */
   _createScrollerRows(count) {
     const rows = [];
-    for (var i = 0; i < count; i++) {
+    for (let i = 0; i < count; i++) {
       const row = document.createElement('tr');
       row.setAttribute('part', 'row');
       row.setAttribute('role', 'row');
@@ -521,7 +527,7 @@ class GridElement extends
 
   /** @private */
   _createCell(tagName) {
-    const contentId = this._contentIndex = this._contentIndex + 1 || 0;
+    const contentId = (this._contentIndex = this._contentIndex + 1 || 0);
     const slotName = 'vaadin-grid-cell-content-' + contentId;
 
     const cellContent = document.createElement('vaadin-grid-cell-content');
@@ -580,20 +586,20 @@ class GridElement extends
 
     const contentsFragment = document.createDocumentFragment();
 
-    Array.from(row.children).forEach(cell => cell._vacant = true);
+    Array.from(row.children).forEach((cell) => (cell._vacant = true));
     row.innerHTML = '';
     if (row.id !== 'sizer') {
       row.hidden = true;
     }
     columns
-      .filter(column => !column.hidden)
+      .filter((column) => !column.hidden)
       .forEach((column, index, cols) => {
         let cell;
 
         if (section === 'body') {
-        // Body
+          // Body
           column._cells = column._cells || [];
-          cell = column._cells.filter(cell => cell._vacant)[0];
+          cell = column._cells.filter((cell) => cell._vacant)[0];
           if (!cell) {
             cell = this._createCell('td');
             column._cells.push(cell);
@@ -602,9 +608,9 @@ class GridElement extends
           row.appendChild(cell);
 
           if (index === cols.length - 1 && (this._rowDetailsTemplate || this.rowDetailsRenderer)) {
-          // Add details cell as last cell to body rows
+            // Add details cell as last cell to body rows
             this._detailsCells = this._detailsCells || [];
-            const detailsCell = this._detailsCells.filter(cell => cell._vacant)[0] || this._createCell('td');
+            const detailsCell = this._detailsCells.filter((cell) => cell._vacant)[0] || this._createCell('td');
             if (this._detailsCells.indexOf(detailsCell) === -1) {
               this._detailsCells.push(detailsCell);
             }
@@ -621,7 +627,7 @@ class GridElement extends
             column.notifyPath('_cells.*', column._cells);
           }
         } else {
-        // Header & footer
+          // Header & footer
           const tagName = section === 'header' ? 'th' : 'td';
           if (isColumnRow || column.localName === 'vaadin-grid-column-group') {
             cell = column[`_${section}Cell`] || this._createCell(tagName);
@@ -630,7 +636,7 @@ class GridElement extends
             column[`_${section}Cell`] = cell;
           } else {
             column._emptyCells = column._emptyCells || [];
-            cell = column._emptyCells.filter(cell => cell._vacant)[0] || this._createCell(tagName);
+            cell = column._emptyCells.filter((cell) => cell._vacant)[0] || this._createCell(tagName);
             cell._column = column;
             row.appendChild(cell);
             if (column._emptyCells.indexOf(cell) === -1) {
@@ -664,7 +670,7 @@ class GridElement extends
       return;
     }
 
-    const visibleRowCells = Array.from(row.children).filter(cell => {
+    const visibleRowCells = Array.from(row.children).filter((cell) => {
       const column = cell._column;
       if (column._emptyCells && column._emptyCells.indexOf(cell) > -1) {
         // The cell is an "empty cell"  -> doesn't block hiding the row
@@ -715,7 +721,7 @@ class GridElement extends
   }
 
   /** @private */
-  _columnTreeChanged(columnTree, splices) {
+  _columnTreeChanged(columnTree) {
     this._renderColumnTree(columnTree);
     this.recalculateColumnWidths();
   }
@@ -725,7 +731,9 @@ class GridElement extends
    * @protected
    */
   _renderColumnTree(columnTree) {
-    Array.from(this.$.items.children).forEach((row) => this._updateRow(row, columnTree[columnTree.length - 1], null, false, true));
+    Array.from(this.$.items.children).forEach((row) =>
+      this._updateRow(row, columnTree[columnTree.length - 1], null, false, true)
+    );
 
     while (this.$.header.children.length < columnTree.length) {
       const headerRow = document.createElement('tr');
@@ -743,11 +751,13 @@ class GridElement extends
       this.$.footer.removeChild(this.$.footer.firstElementChild);
     }
 
-    Array.from(this.$.header.children)
-      .forEach((headerRow, index) => this._updateRow(headerRow, columnTree[index], 'header', index === columnTree.length - 1));
+    Array.from(this.$.header.children).forEach((headerRow, index) =>
+      this._updateRow(headerRow, columnTree[index], 'header', index === columnTree.length - 1)
+    );
 
-    Array.from(this.$.footer.children)
-      .forEach((footerRow, index) => this._updateRow(footerRow, columnTree[columnTree.length - 1 - index], 'footer', index === 0));
+    Array.from(this.$.footer.children).forEach((footerRow, index) =>
+      this._updateRow(footerRow, columnTree[columnTree.length - 1 - index], 'footer', index === 0)
+    );
 
     // Sizer rows
     this._updateRow(this.$.sizer, columnTree[columnTree.length - 1]);
@@ -779,7 +789,7 @@ class GridElement extends
         this.$.table.style.height = '';
         this.$.table.style.minHeight = '100%';
         this.$.table.style.maxHeight = '100%';
-        setTimeout(() => this.$.table.style.height = `${this.$.scroller.offsetHeight}px`);
+        setTimeout(() => (this.$.table.style.height = `${this.$.scroller.offsetHeight}px`));
       }
     }
   }
@@ -797,13 +807,14 @@ class GridElement extends
     this._a11yUpdateRowSelected(row, model.selected);
     this._a11yUpdateRowLevel(row, model.level);
     this._toggleAttribute('expanded', model.expanded, row);
+    this._toggleAttribute('details-opened', this._isDetailsOpened(item), row);
     if (this._rowDetailsTemplate || this.rowDetailsRenderer) {
       this._toggleDetailsCell(row, item);
     }
     this._generateCellClassNames(row, model);
     this._filterDragAndDrop(row, model);
 
-    Array.from(row.children).forEach(cell => {
+    Array.from(row.children).forEach((cell) => {
       if (cell._renderer) {
         const owner = cell._column || this;
         cell._renderer.call(owner, cell._content, owner, model);
@@ -816,13 +827,11 @@ class GridElement extends
       }
     });
 
-    this._debouncerUpdateHeights = Debouncer.debounce(this._debouncerUpdateHeights,
-      timeOut.after(1), () => {
-        this._updateMetrics();
-        this._positionItems();
-        this._updateScrollerSize();
-      }
-    );
+    this._debouncerUpdateHeights = Debouncer.debounce(this._debouncerUpdateHeights, timeOut.after(1), () => {
+      this._updateMetrics();
+      this._positionItems();
+      this._updateScrollerSize();
+    });
   }
 
   /** @private */
@@ -878,8 +887,7 @@ class GridElement extends
       level: this._getIndexLevel(row.index),
       expanded: this._isExpanded(row._item),
       selected: this._isSelected(row._item),
-      detailsOpened:
-        !!(this._rowDetailsTemplate || this.rowDetailsRenderer) && this._isDetailsOpened(row._item)
+      detailsOpened: !!(this._rowDetailsTemplate || this.rowDetailsRenderer) && this._isDetailsOpened(row._item)
     };
   }
 
@@ -890,8 +898,8 @@ class GridElement extends
   render() {
     if (this._columnTree) {
       // header and footer renderers
-      this._columnTree.forEach(level => {
-        level.forEach(column => column._renderHeaderAndFooter());
+      this._columnTree.forEach((level) => {
+        level.forEach((column) => column._renderHeaderAndFooter());
       });
 
       // body and row details renderers
@@ -918,14 +926,13 @@ class GridElement extends
 
   /** @protected */
   __forceReflow() {
-    this._debouncerForceReflow = Debouncer.debounce(this._debouncerForceReflow,
-      animationFrame, () => {
-        this.$.scroller.style.overflow = 'hidden';
-        setTimeout(() => this.$.scroller.style.overflow = '');
-      }
-    );
+    this._debouncerForceReflow = Debouncer.debounce(this._debouncerForceReflow, animationFrame, () => {
+      this.$.scroller.style.overflow = 'hidden';
+      setTimeout(() => (this.$.scroller.style.overflow = ''));
+    });
   }
 }
 
 customElements.define(GridElement.is, GridElement);
+
 export { GridElement };

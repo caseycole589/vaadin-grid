@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+
+<head lang="en">
+  <meta charset="UTF-8" />
+  <title>Column groups visual tests</title>
+  <script>
+    window.polymerSkipLoadingFontRoboto = true;
+  </script>
+</head>
+
+<body>
+  <style>
+    #grid-tests {
+      display: inline-block;
+      width: 800px;
+    }
+  </style>
+
+  <div id="grid-tests">
+    <dom-bind>
+      <template>
+        <x-data-provider data-provider="{{dataProvider}}"></x-data-provider>
+
+        <vaadin-grid data-provider="[[dataProvider]]" size="200" style="height: 250px" column-reordering-allowed>
+          <vaadin-grid-column width="30px" flex-grow="0" resizable>
+            <template class="header">#</template>
+            <template>[[index]]</template>
+          </vaadin-grid-column>
+
+          <vaadin-grid-column-group resizable>
+            <template class="header">Name</template>
+
+            <vaadin-grid-column width="calc(20% - 50px)">
+              <template class="header">First</template>
+              <template>[[item.name.first]]</template>
+            </vaadin-grid-column>
+
+            <vaadin-grid-column width="calc(20% - 50px)">
+              <template class="header">Last</template>
+              <template>[[item.name.last]]</template>
+            </vaadin-grid-column>
+          </vaadin-grid-column-group>
+
+          <vaadin-grid-column-group resizable>
+            <template class="header">Location</template>
+
+            <vaadin-grid-column width="calc(20% - 50px)">
+              <template class="header">City</template>
+              <template>[[item.location.city]]</template>
+            </vaadin-grid-column>
+
+            <vaadin-grid-column width="calc(20% - 50px)">
+              <template class="header">State</template>
+              <template>[[item.location.state]]</template>
+            </vaadin-grid-column>
+
+            <vaadin-grid-column width="200px" resizable>
+              <template class="header">Street</template>
+              <template>[[item.location.street]]</template>
+            </vaadin-grid-column>
+          </vaadin-grid-column-group>
+        </vaadin-grid>
+      </template>
+    </dom-bind>
+  </div>
+
+  <script type="module">
+    import '@polymer/polymer/lib/elements/dom-bind.js';
+    import './helpers/x-data-provider.js';
+
+    (async () => {
+      const theme = window.location.search.replace(/.*theme=(\w+).*/, '$1') || 'lumo';
+      const dir = window.location.search.replace(/.*dir=(\w+).*/, '$1') || 'ltr';
+      document.documentElement.setAttribute('dir', dir);
+
+      await Promise.all([
+        import('../../theme/' + theme + '/vaadin-grid-column-group.js'),
+        import('../../theme/' + theme + '/vaadin-grid.js')
+      ]);
+
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          document.getElementById('grid-tests').dataset.ready = true;
+        }, 300);
+      });
+    })();
+  </script>
+</body>

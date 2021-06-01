@@ -1,14 +1,14 @@
 /**
-@license
-Copyright (c) 2017 Vaadin Ltd.
-This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
-*/
-import { Base } from "@polymer/polymer/polymer-legacy.js"
+ * @license
+ * Copyright (c) 2020 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import { Base } from '@polymer/polymer/polymer-legacy.js';
 
 /**
  * @polymerMixin
  */
-export const ArrayDataProviderMixin = superClass =>
+export const ArrayDataProviderMixin = (superClass) =>
   class ArrayDataProviderMixin extends superClass {
     static get properties() {
       return {
@@ -19,32 +19,32 @@ export const ArrayDataProviderMixin = superClass =>
          * @type {Array<!GridItem> | undefined}
          */
         items: Array
-      }
+      };
     }
 
     static get observers() {
-      return ["_itemsChanged(items, items.*, isAttached)"]
+      return ['_itemsChanged(items, items.*, isAttached)'];
     }
 
     /** @private */
     _itemsChanged(items, splices, isAttached) {
       if (!isAttached) {
-        return
+        return;
       }
       if (!Array.isArray(items)) {
         if (items === undefined || items === null) {
-          this.size = 0
+          this.size = 0;
         }
         if (this.dataProvider === this._arrayDataProvider) {
-          this.dataProvider = undefined
+          this.dataProvider = undefined;
         }
-        return
+        return;
       }
 
-      this.size = items.length
-      this.dataProvider = this.dataProvider || this._arrayDataProvider
-      this.clearCache()
-      this._ensureFirstPageLoaded()
+      this.size = items.length;
+      this.dataProvider = this.dataProvider || this._arrayDataProvider;
+      this.clearCache();
+      this._ensureFirstPageLoaded();
     }
 
     /**
@@ -53,22 +53,22 @@ export const ArrayDataProviderMixin = superClass =>
      * @protected
      */
     _arrayDataProvider(opts, cb) {
-      let items = (Array.isArray(this.items) ? this.items : []).slice(0)
+      let items = (Array.isArray(this.items) ? this.items : []).slice(0);
 
-      if (this._filters && this._checkPaths(this._filters, "filtering", items)) {
-        items = this._filter(items)
+      if (this._filters && this._checkPaths(this._filters, 'filtering', items)) {
+        items = this._filter(items);
       }
 
-      this.size = items.length
+      this.size = items.length;
 
-      if (opts.sortOrders.length && this._checkPaths(this._sorters, "sorting", items)) {
-        items = items.sort(this._multiSort.bind(this))
+      if (opts.sortOrders.length && this._checkPaths(this._sorters, 'sorting', items)) {
+        items = items.sort(this._multiSort.bind(this));
       }
 
-      const start = opts.page * opts.pageSize
-      const end = start + opts.pageSize
-      const slice = items.slice(start, end)
-      cb(slice, items.length)
+      const start = opts.page * opts.pageSize;
+      const end = start + opts.pageSize;
+      const slice = items.slice(start, end);
+      cb(slice, items.length);
     }
 
     /**
@@ -80,29 +80,27 @@ export const ArrayDataProviderMixin = superClass =>
      */
     _checkPaths(arrayToCheck, action, items) {
       if (!items.length) {
-        return false
+        return false;
       }
 
-      let result = true
+      let result = true;
 
-      for (var i in arrayToCheck) {
-        const path = arrayToCheck[i].path
+      for (let i in arrayToCheck) {
+        const path = arrayToCheck[i].path;
 
         // skip simple paths
-        if (!path || path.indexOf(".") === -1) {
-          continue
+        if (!path || path.indexOf('.') === -1) {
+          continue;
         }
 
-        const parentProperty = path.replace(/\.[^\.]*$/, "") // a.b.c -> a.b
+        const parentProperty = path.replace(/\.[^.]*$/, ''); // a.b.c -> a.b
         if (Base.get(parentProperty, items[0]) === undefined) {
-          console.warn(
-            `Path "${path}" used for ${action} does not exist in all of the items, ${action} is disabled.`
-          )
-          result = false
+          console.warn(`Path "${path}" used for ${action} does not exist in all of the items, ${action} is disabled.`);
+          result = false;
         }
       }
 
-      return result
+      return result;
     }
 
     /**
@@ -113,17 +111,17 @@ export const ArrayDataProviderMixin = superClass =>
      */
     _multiSort(a, b) {
       return this._sorters
-        .map(sort => {
-          if (sort.direction === "asc") {
-            return this._compare(Base.get(sort.path, a), Base.get(sort.path, b))
-          } else if (sort.direction === "desc") {
-            return this._compare(Base.get(sort.path, b), Base.get(sort.path, a))
+        .map((sort) => {
+          if (sort.direction === 'asc') {
+            return this._compare(Base.get(sort.path, a), Base.get(sort.path, b));
+          } else if (sort.direction === 'desc') {
+            return this._compare(Base.get(sort.path, b), Base.get(sort.path, a));
           }
-          return 0
+          return 0;
         })
         .reduce((p, n) => {
-          return p ? p : n
-        }, 0)
+          return p ? p : n;
+        }, 0);
     }
 
     /**
@@ -133,16 +131,11 @@ export const ArrayDataProviderMixin = superClass =>
      */
     _normalizeEmptyValue(value) {
       if ([undefined, null].indexOf(value) >= 0) {
-        return ""
+        return '';
       } else if (isNaN(value)) {
-        // its the dash date
-        if (value.charCodeAt(2) === 47) {
-          const temp = value.split("/")
-          return [temp[2], temp[0], temp[1]].join("")
-        }
-        return value.toLowerCase().toString()
+        return value.toString();
       } else {
-        return value
+        return value;
       }
     }
 
@@ -153,16 +146,16 @@ export const ArrayDataProviderMixin = superClass =>
      * @protected
      */
     _compare(a, b) {
-      a = this._normalizeEmptyValue(a)
-      b = this._normalizeEmptyValue(b)
+      a = this._normalizeEmptyValue(a);
+      b = this._normalizeEmptyValue(b);
 
       if (a < b) {
-        return -1
+        return -1;
       }
       if (a > b) {
-        return 1
+        return 1;
       }
-      return 0
+      return 0;
     }
 
     /**
@@ -171,16 +164,14 @@ export const ArrayDataProviderMixin = superClass =>
      * @protected
      */
     _filter(items) {
-      return items.filter((item, index) => {
+      return items.filter((item) => {
         return (
-          this._filters.filter(filter => {
-            const value = this._normalizeEmptyValue(Base.get(filter.path, item))
-            const filterValueLowercase = this._normalizeEmptyValue(filter.value)
-              .toString()
-              .toLowerCase()
-            return value.toString().toLowerCase().indexOf(filterValueLowercase) === -1
+          this._filters.filter((filter) => {
+            const value = this._normalizeEmptyValue(Base.get(filter.path, item));
+            const filterValueLowercase = this._normalizeEmptyValue(filter.value).toString().toLowerCase();
+            return value.toString().toLowerCase().indexOf(filterValueLowercase) === -1;
           }).length === 0
-        )
-      })
+        );
+      });
     }
-  }
+  };

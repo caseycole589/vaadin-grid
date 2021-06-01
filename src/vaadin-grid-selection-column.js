@@ -1,13 +1,12 @@
 /**
-@license
-Copyright (c) 2017 Vaadin Ltd.
-This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
-*/
-import '@polymer/polymer/polymer-legacy.js';
-
+ * @license
+ * Copyright (c) 2020 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import { html } from '@polymer/polymer/lib/utils/html-tag.js';
 import { GridColumnElement } from './vaadin-grid-column.js';
 import '@vaadin/vaadin-checkbox/src/vaadin-checkbox.js';
-import { html } from '@polymer/polymer/lib/utils/html-tag.js';
+
 /**
  * `<vaadin-grid-selection-column>` is a helper element for the `<vaadin-grid>`
  * that provides default templates and functionality for item selection.
@@ -30,17 +29,25 @@ import { html } from '@polymer/polymer/lib/utils/html-tag.js';
  *
  * __The default content can also be overridden__
  *
+ * @fires {CustomEvent} select-all-changed - Fired when the `selectAll` property changes.
  */
 class GridSelectionColumnElement extends GridColumnElement {
   static get template() {
     return html`
-    <template class="header" id="defaultHeaderTemplate">
-      <vaadin-checkbox class="vaadin-grid-select-all-checkbox" aria-label="Select All" hidden\$="[[_selectAllHidden]]" on-checked-changed="_onSelectAllCheckedChanged" checked="[[_isChecked(selectAll, _indeterminate)]]" indeterminate="[[_indeterminate]]"></vaadin-checkbox>
-    </template>
-    <template id="defaultBodyTemplate">
-      <vaadin-checkbox aria-label="Select Row" checked="{{selected}}"></vaadin-checkbox>
-    </template>
-`;
+      <template class="header" id="defaultHeaderTemplate">
+        <vaadin-checkbox
+          class="vaadin-grid-select-all-checkbox"
+          aria-label="Select All"
+          hidden$="[[_selectAllHidden]]"
+          on-checked-changed="_onSelectAllCheckedChanged"
+          checked="[[_isChecked(selectAll, _indeterminate)]]"
+          indeterminate="[[_indeterminate]]"
+        ></vaadin-checkbox>
+      </template>
+      <template id="defaultBodyTemplate">
+        <vaadin-checkbox aria-label="Select Row" checked="{{selected}}"></vaadin-checkbox>
+      </template>
+    `;
   }
 
   static get is() {
@@ -85,7 +92,7 @@ class GridSelectionColumnElement extends GridColumnElement {
        */
       autoSelect: {
         type: Boolean,
-        value: false,
+        value: false
       },
 
       /** @private */
@@ -104,13 +111,21 @@ class GridSelectionColumnElement extends GridColumnElement {
   }
 
   static get observers() {
-    return [
-      '_onSelectAllChanged(selectAll)'
-    ];
+    return ['_onSelectAllChanged(selectAll)'];
   }
 
   /** @private */
-  _pathOrHeaderChanged(path, header, headerCell, footerCell, cells, renderer, headerRenderer, bodyTemplate, headerTemplate) {
+  _pathOrHeaderChanged(
+    path,
+    header,
+    headerCell,
+    footerCell,
+    cells,
+    renderer,
+    headerRenderer,
+    bodyTemplate,
+    headerTemplate
+  ) {
     // As a special case, allow overriding the default header / body templates
     if (cells.value && (path !== undefined || renderer !== undefined)) {
       this._bodyTemplate = bodyTemplate = undefined;
@@ -120,12 +135,22 @@ class GridSelectionColumnElement extends GridColumnElement {
       this._headerTemplate = headerTemplate = undefined;
       this.__cleanCellsOfTemplateProperties([headerCell]);
     }
-    super._pathOrHeaderChanged(path, header, headerCell, footerCell, cells, renderer, headerRenderer, bodyTemplate, headerTemplate);
+    super._pathOrHeaderChanged(
+      path,
+      header,
+      headerCell,
+      footerCell,
+      cells,
+      renderer,
+      headerRenderer,
+      bodyTemplate,
+      headerTemplate
+    );
   }
 
   /** @private */
   __cleanCellsOfTemplateProperties(cells) {
-    cells.forEach(cell => {
+    cells.forEach((cell) => {
       cell._content.innerHTML = '';
       delete cell._instance;
       delete cell._template;
@@ -164,20 +189,6 @@ class GridSelectionColumnElement extends GridColumnElement {
     this._grid.removeEventListener('data-provider-changed', this._boundOnDataProviderChanged);
     this._grid.removeEventListener('filter-changed', this._boundOnSelectedItemsChanged);
     this._grid.removeEventListener('selected-items-changed', this._boundOnSelectedItemsChanged);
-
-    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    if (isSafari && window.ShadyDOM && this.parentElement) {
-      // Detach might have beem caused by order change.
-      // Shady on safari doesn't restore isAttached so we'll need to do it manually.
-      const parent = this.parentElement;
-      const nextSibling = this.nextElementSibling;
-      parent.removeChild(this);
-      if (nextSibling) {
-        parent.insertBefore(this, nextSibling);
-      } else {
-        parent.appendChild(this);
-      }
-    }
 
     super.disconnectedCallback();
   }
@@ -242,7 +253,7 @@ class GridSelectionColumnElement extends GridColumnElement {
   }
 
   /** @private */
-  _onSelectedItemsChanged(e) {
+  _onSelectedItemsChanged() {
     this._selectAllChangeLock = true;
     if (Array.isArray(this._grid.items)) {
       if (!this._grid.selectedItems.length) {
@@ -260,7 +271,7 @@ class GridSelectionColumnElement extends GridColumnElement {
   }
 
   /** @private */
-  _onDataProviderChanged(e) {
+  _onDataProviderChanged() {
     this._selectAllHidden = !Array.isArray(this._grid.items);
   }
 }

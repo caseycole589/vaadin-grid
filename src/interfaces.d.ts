@@ -1,5 +1,5 @@
-import { GridColumnElement } from '../src/vaadin-grid-column.js';
-import { GridElement } from '../src/vaadin-grid.js';
+import { GridColumnElement } from './vaadin-grid-column.js';
+import { GridElement } from './vaadin-grid.js';
 
 export type GridBodyRenderer = (
   root: HTMLElement,
@@ -33,6 +33,8 @@ export type GridDataProvider = (
 ) => void;
 
 export type GridDragAndDropFilter = (model: GridItemModel) => boolean;
+
+export type GridDropLocation = 'above' | 'on-top' | 'below' | 'empty';
 
 export type GridDropMode = 'between' | 'on-top' | 'on-top-or-between' | 'on-grid';
 
@@ -80,3 +82,5 @@ export interface GridSorter {
   path: string;
   direction: GridSorterDirection;
 }
+
+export { GridColumnElement };

@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+
+<head lang="en">
+  <meta charset="UTF-8" />
+  <title>header-footer visual tests</title>
+  <script>
+    window.polymerSkipLoadingFontRoboto = true;
+  </script>
+</head>
+
+<body>
+  <style>
+    #grid-tests {
+      display: inline-block;
+      width: 200px;
+    }
+  </style>
+
+  <div id="grid-tests">
+    <dom-bind>
+      <template>
+        <x-array-data-provider items="{{items}}"></x-array-data-provider>
+        <vaadin-grid items="[[items]]" size="200" style="height: 100px">
+          <template class="row-details"> [[index]] </template>
+          <vaadin-grid-column>
+            <template class="header">header</template>
+            <template>[[index]]</template>
+            <template class="footer">footer</template>
+          </vaadin-grid-column>
+        </vaadin-grid>
+        <br />
+        <vaadin-grid items="[[items]]" size="200" style="height: 100px">
+          <template class="row-details"> [[index]] </template>
+          <vaadin-grid-column>
+            <template>[[index]]</template>
+          </vaadin-grid-column>
+        </vaadin-grid>
+      </template>
+    </dom-bind>
+  </div>
+
+  <script type="module">
+    import '@polymer/polymer/lib/elements/dom-bind.js';
+    import './helpers/x-data-provider.js';
+
+    (async () => {
+      const theme = window.location.search.replace(/.*theme=(\w+).*/, '$1') || 'lumo';
+      const dir = window.location.search.replace(/.*dir=(\w+).*/, '$1') || 'ltr';
+      document.documentElement.setAttribute('dir', dir);
+
+      await import('../../theme/' + theme + '/vaadin-grid.js');
+
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          document.getElementById('grid-tests').dataset.ready = true;
+        }, 300);
+      });
+    })();
+  </script>
+</body>

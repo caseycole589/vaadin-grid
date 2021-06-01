@@ -1,18 +1,15 @@
 /**
-@license
-Copyright (c) 2017 Vaadin Ltd.
-This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
-*/
-import '@polymer/polymer/polymer-legacy.js';
-
-import '@polymer/polymer/lib/elements/custom-style.js';
+ * @license
+ * Copyright (c) 2020 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
 import { ThemableMixin } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
 import { DirMixin } from '@vaadin/vaadin-element-mixin/vaadin-dir-mixin.js';
-import { html } from '@polymer/polymer/lib/utils/html-tag.js';
-import { PolymerElement } from '@polymer/polymer/polymer-element.js';
+
 const $_documentContainer = document.createElement('template');
 
-$_documentContainer.innerHTML = `<custom-style>
+$_documentContainer.innerHTML = `
   <style>
     @font-face {
       font-family: 'vaadin-grid-sorter-icons';
@@ -21,9 +18,10 @@ $_documentContainer.innerHTML = `<custom-style>
       font-style: normal;
     }
   </style>
-</custom-style>`;
+`;
 
 document.head.appendChild($_documentContainer.content);
+
 /**
  * `<vaadin-grid-sorter>` is a helper element for the `<vaadin-grid>` that provides out-of-the-box UI controls,
  * visual feedback, and handlers for sorting the grid data.
@@ -54,58 +52,61 @@ document.head.appendChild($_documentContainer.content);
  * -------------|-------------|------------
  * `direction` | Sort direction of a sorter | :host
  *
- * @extends PolymerElement
+ * @fires {CustomEvent} direction-changed - Fired when the `direction` property changes.
+ * @fires {CustomEvent} sorter-changed - Fired when the `path` or `direction` property changes.
+ *
+ * @extends HTMLElement
  */
 class GridSorterElement extends ThemableMixin(DirMixin(PolymerElement)) {
   static get template() {
     return html`
-    <style>
-      :host {
-        display: inline-flex;
-        cursor: pointer;
-        max-width: 100%;
-      }
+      <style>
+        :host {
+          display: inline-flex;
+          cursor: pointer;
+          max-width: 100%;
+        }
 
-      [part="content"] {
-        flex: 1 1 auto;
-      }
+        [part='content'] {
+          flex: 1 1 auto;
+        }
 
-      [part="indicators"] {
-        position: relative;
-        align-self: center;
-        flex: none;
-      }
+        [part='indicators'] {
+          position: relative;
+          align-self: center;
+          flex: none;
+        }
 
-      [part="order"] {
-        display: inline;
-        vertical-align: super;
-      }
+        [part='order'] {
+          display: inline;
+          vertical-align: super;
+        }
 
-      [part="indicators"]::before {
-        font-family: 'vaadin-grid-sorter-icons';
-        display: inline-block;
-      }
+        [part='indicators']::before {
+          font-family: 'vaadin-grid-sorter-icons';
+          display: inline-block;
+        }
 
-      :host(:not([direction])) [part="indicators"]::before {
-        content: "\\e901";
-      }
+        :host(:not([direction])) [part='indicators']::before {
+          content: '\\e901';
+        }
 
-      :host([direction=asc]) [part="indicators"]::before {
-        content: "\\e900";
-      }
+        :host([direction='asc']) [part='indicators']::before {
+          content: '\\e900';
+        }
 
-      :host([direction=desc]) [part="indicators"]::before {
-        content: "\\e902";
-      }
-    </style>
+        :host([direction='desc']) [part='indicators']::before {
+          content: '\\e902';
+        }
+      </style>
 
-    <div part="content">
-      <slot></slot>
-    </div>
-    <div part="indicators">
-      <span part="order">[[_getDisplayOrder(_order)]]</span>
-    </div>
-`;
+      <div part="content">
+        <slot></slot>
+      </div>
+      <div part="indicators">
+        <span part="order">[[_getDisplayOrder(_order)]]</span>
+      </div>
+    `;
   }
 
   static get is() {
@@ -144,16 +145,13 @@ class GridSorterElement extends ThemableMixin(DirMixin(PolymerElement)) {
       /** @private */
       _isConnected: {
         type: Boolean,
-        value: false
+        observer: '__isConnectedChanged'
       }
     };
   }
 
   static get observers() {
-    return [
-      '_pathOrDirectionChanged(path, direction, _isConnected)',
-      '_directionOrOrderChanged(direction, _order)'
-    ];
+    return ['_pathOrDirectionChanged(path, direction)'];
   }
 
   /** @protected */
@@ -175,14 +173,26 @@ class GridSorterElement extends ThemableMixin(DirMixin(PolymerElement)) {
   }
 
   /** @private */
-  _pathOrDirectionChanged(path, direction, isConnected) {
-    if (path === undefined || direction === undefined || isConnected === undefined) {
+  _pathOrDirectionChanged() {
+    this.__dispatchSorterChangedEvenIfPossible();
+  }
+
+  /** @private */
+  __isConnectedChanged(newValue, oldValue) {
+    if (oldValue === false) {
       return;
     }
 
-    if (isConnected) {
-      this.dispatchEvent(new CustomEvent('sorter-changed', {bubbles: true, composed: true}));
+    this.__dispatchSorterChangedEvenIfPossible();
+  }
+
+  /** @private */
+  __dispatchSorterChangedEvenIfPossible() {
+    if (this.path === undefined || this.direction === undefined || !this._isConnected) {
+      return;
     }
+
+    this.dispatchEvent(new CustomEvent('sorter-changed', { bubbles: true, composed: true }));
   }
 
   /** @private */
@@ -205,23 +215,6 @@ class GridSorterElement extends ThemableMixin(DirMixin(PolymerElement)) {
       this.direction = null;
     } else {
       this.direction = 'asc';
-    }
-  }
-
-  /** @private */
-  _directionOrOrderChanged(direction, order) {
-    if (direction === undefined || order === undefined) {
-      return;
-    }
-
-    // Safari has an issue with repainting shadow root element styles when a host attribute changes.
-    // Need this workaround (toggle any inline css property on and off) until the issue gets fixed.
-    var isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
-    if (isSafari && this.root) {
-      this.root.querySelectorAll('*').forEach(function(el) {
-        el.style['-webkit-backface-visibility'] = 'visible';
-        el.style['-webkit-backface-visibility'] = '';
-      });
     }
   }
 }

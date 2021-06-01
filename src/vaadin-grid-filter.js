@@ -1,15 +1,13 @@
 /**
-@license
-Copyright (c) 2017 Vaadin Ltd.
-This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
-*/
-import '@polymer/polymer/polymer-legacy.js';
-
-import '@vaadin/vaadin-text-field/src/vaadin-text-field.js';
-import { html } from '@polymer/polymer/lib/utils/html-tag.js';
+ * @license
+ * Copyright (c) 2020 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
 import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
 import { timeOut } from '@polymer/polymer/lib/utils/async.js';
-import { PolymerElement } from '@polymer/polymer/polymer-element.js';
+import '@vaadin/vaadin-text-field/src/vaadin-text-field.js';
+
 /**
  * `<vaadin-grid-filter>` is a helper element for the `<vaadin-grid>` that provides out-of-the-box UI controls,
  * and handlers for filtering the grid data.
@@ -24,25 +22,26 @@ import { PolymerElement } from '@polymer/polymer/polymer-element.js';
  * </vaadin-grid-column>
  * ```
  *
+ * @fires {CustomEvent} value-changed - Fired when the `value` property changes.
  */
 class GridFilterElement extends PolymerElement {
   static get template() {
     return html`
-    <style>
-      :host {
-        display: inline-flex;
-        max-width: 100%;
-      }
+      <style>
+        :host {
+          display: inline-flex;
+          max-width: 100%;
+        }
 
-      #filter {
-        width: 100%;
-        box-sizing: border-box;
-      }
-    </style>
-    <slot name="filter">
-      <vaadin-text-field id="filter" value="{{value}}"></vaadin-text-field>
-    </slot>
-`;
+        #filter {
+          width: 100%;
+          box-sizing: border-box;
+        }
+      </style>
+      <slot name="filter">
+        <vaadin-text-field id="filter" value="{{value}}"></vaadin-text-field>
+      </slot>
+    `;
   }
 
   static get is() {
@@ -100,12 +99,9 @@ class GridFilterElement extends PolymerElement {
     }
     this._previousValue = value;
 
-    this._debouncerFilterChanged = Debouncer.debounce(
-      this._debouncerFilterChanged,
-      timeOut.after(200),
-      () => {
-        this.dispatchEvent(new CustomEvent('filter-changed', {bubbles: true}));
-      });
+    this._debouncerFilterChanged = Debouncer.debounce(this._debouncerFilterChanged, timeOut.after(200), () => {
+      this.dispatchEvent(new CustomEvent('filter-changed', { bubbles: true }));
+    });
   }
 
   focus() {
