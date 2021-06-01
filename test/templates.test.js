@@ -3,7 +3,6 @@ import sinon from 'sinon';
 import { aTimeout, fixtureSync } from '@open-wc/testing-helpers';
 import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
 import '@polymer/polymer/lib/elements/dom-bind.js';
-import '@vaadin/vaadin-text-field/vaadin-text-field.js';
 import {
   flushGrid,
   getBodyCellContent,
