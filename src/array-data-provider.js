@@ -70,7 +70,11 @@ function normalizeEmptyValue(value) {
   if ([undefined, null].indexOf(value) >= 0) {
     return '';
   } else if (isNaN(value)) {
-    return value.toString();
+    if (value.charCodeAt(2) === 47) {
+      const temp = value.split('/');
+      return [temp[2], temp[0], temp[1]].join('');
+    }
+    return value.toLowerCase().toString();
   }
   return value;
 }
