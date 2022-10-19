@@ -1,16 +1,16 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
-import { GestureEventListeners } from '@polymer/polymer/lib/mixins/gesture-event-listeners.js';
-import { addListener } from '@polymer/polymer/lib/utils/gestures.js';
+import { addListener } from '@vaadin/component-base/src/gestures.js';
 
 /**
  * @polymerMixin
  */
 export const ColumnResizingMixin = (superClass) =>
-  class ColumnResizingMixin extends GestureEventListeners(superClass) {
+  class ColumnResizingMixin extends superClass {
+    /** @protected */
     ready() {
       super.ready();
       const scroller = this.$.scroller;
@@ -22,13 +22,13 @@ export const ColumnResizingMixin = (superClass) =>
       // Disable contextmenu on any resize separator.
       scroller.addEventListener(
         'contextmenu',
-        (e) => e.target.getAttribute('part') == 'resize-handle' && e.preventDefault()
+        (e) => e.target.getAttribute('part') === 'resize-handle' && e.preventDefault(),
       );
 
       // Disable native cell focus when resizing
       scroller.addEventListener(
         'mousedown',
-        (e) => e.target.getAttribute('part') === 'resize-handle' && e.preventDefault()
+        (e) => e.target.getAttribute('part') === 'resize-handle' && e.preventDefault(),
       );
     }
 
@@ -39,26 +39,23 @@ export const ColumnResizingMixin = (superClass) =>
         const cell = handle.parentElement;
         let column = cell._column;
 
-        this._toggleAttribute('column-resizing', true, this.$.scroller);
+        this.$.scroller.toggleAttribute('column-resizing', true);
 
         // Get the target column to resize
         while (column.localName === 'vaadin-grid-column-group') {
-          column = Array.prototype.slice
-            .call(column._childColumns, 0)
-            .sort(function (a, b) {
-              return a._order - b._order;
-            })
-            .filter(function (column) {
-              return !column.hidden;
-            })
+          column = column._childColumns
+            .slice(0)
+            .sort((a, b) => a._order - b._order)
+            .filter((column) => !column.hidden)
             .pop();
         }
 
+        const eventX = e.detail.x;
         const columnRowCells = Array.from(this.$.header.querySelectorAll('[part~="row"]:last-child [part~="cell"]'));
         const targetCell = columnRowCells.filter((cell) => cell._column === column)[0];
         // Resize the target column
         if (targetCell.offsetWidth) {
-          const style = window.getComputedStyle(targetCell);
+          const style = getComputedStyle(targetCell._content);
           const minWidth =
             10 +
             parseInt(style.paddingLeft) +
@@ -67,32 +64,50 @@ export const ColumnResizingMixin = (superClass) =>
             parseInt(style.borderRightWidth) +
             parseInt(style.marginLeft) +
             parseInt(style.marginRight);
-          const maxWidth =
-            targetCell.offsetWidth +
-            (this.__isRTL
-              ? targetCell.getBoundingClientRect().left - e.detail.x
-              : e.detail.x - targetCell.getBoundingClientRect().right);
-          column.width = Math.max(minWidth, maxWidth) + 'px';
+
+          let maxWidth;
+
+          const cellWidth = targetCell.offsetWidth;
+          const cellRect = targetCell.getBoundingClientRect();
+
+          // For cells frozen to end, resize handle is flipped horizontally.
+          if (targetCell.hasAttribute('frozen-to-end')) {
+            maxWidth = cellWidth + (this.__isRTL ? eventX - cellRect.right : cellRect.left - eventX);
+          } else {
+            maxWidth = cellWidth + (this.__isRTL ? cellRect.left - eventX : eventX - cellRect.right);
+          }
+
+          column.width = `${Math.max(minWidth, maxWidth)}px`;
           column.flexGrow = 0;
         }
         // Fix width and flex-grow for all preceding columns
         columnRowCells
-          .sort(function (a, b) {
-            return a._column._order - b._column._order;
-          })
-          .forEach(function (cell, index, array) {
+          .sort((a, b) => a._column._order - b._column._order)
+          .forEach((cell, index, array) => {
             if (index < array.indexOf(targetCell)) {
-              cell._column.width = cell.offsetWidth + 'px';
+              cell._column.width = `${cell.offsetWidth}px`;
               cell._column.flexGrow = 0;
             }
           });
 
+        const cellFrozenToEnd = this._frozenToEndCells[0];
+
+        // When handle moves below the cell frozen to end, scroll into view.
+        if (cellFrozenToEnd && this.$.table.scrollWidth > this.$.table.offsetWidth) {
+          const frozenRect = cellFrozenToEnd.getBoundingClientRect();
+          const offset = eventX - (this.__isRTL ? frozenRect.right : frozenRect.left);
+
+          if ((this.__isRTL && offset <= 0) || (!this.__isRTL && offset >= 0)) {
+            this.$.table.scrollLeft += offset;
+          }
+        }
+
         if (e.detail.state === 'end') {
-          this._toggleAttribute('column-resizing', false, this.$.scroller);
+          this.$.scroller.toggleAttribute('column-resizing', false);
           this.dispatchEvent(
             new CustomEvent('column-resize', {
-              detail: { resizedColumn: column }
-            })
+              detail: { resizedColumn: column },
+            }),
           );
         }
 

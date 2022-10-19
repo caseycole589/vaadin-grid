@@ -1,38 +1,31 @@
-import { GridItem } from './interfaces';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { Constructor } from '@open-wc/dedupe-mixin';
 
-declare function SelectionMixin<T extends new (...args: any[]) => {}>(base: T): T & SelectionMixinConstructor;
+export declare function SelectionMixin<TItem, T extends Constructor<HTMLElement>>(
+  base: T,
+): Constructor<SelectionMixinClass<TItem>> & T;
 
-interface SelectionMixinConstructor {
-  new (...args: any[]): SelectionMixin;
-}
-
-interface SelectionMixin {
+export declare class SelectionMixinClass<TItem> {
   /**
    * An array that contains the selected items.
    */
-  selectedItems: Array<GridItem | null> | null;
-  _isSelected(item: GridItem): boolean;
+  selectedItems: TItem[];
 
   /**
    * Selects the given item.
    *
    * @param item The item object
    */
-  selectItem(item: GridItem): void;
+  selectItem(item: TItem): void;
 
   /**
    * Deselects the given item if it is already selected.
    *
    * @param item The item object
    */
-  deselectItem(item: GridItem): void;
-
-  /**
-   * Toggles the selected state of the given item.
-   *
-   * @param item The item object
-   */
-  _toggleItem(item: GridItem): void;
+  deselectItem(item: TItem): void;
 }
-
-export { SelectionMixin, SelectionMixinConstructor };

@@ -1,20 +1,20 @@
 import { expect } from '@esm-bundle/chai';
+import { aTimeout, click, fixtureSync, nextFrame, nextRender } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { fixtureSync, nextFrame } from '@open-wc/testing-helpers';
-import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
 import '@polymer/polymer/lib/elements/dom-repeat.js';
+import '../vaadin-grid.js';
+import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
 import {
   buildDataSet,
-  click,
   flushGrid,
   getBodyCellContent,
   getCellContent,
   getRowCells,
   getRows,
   infiniteDataProvider,
-  scrollToEnd
+  scrollToEnd,
 } from './helpers.js';
-import '../vaadin-grid.js';
 
 class GridDetailsWrapper extends PolymerElement {
   static get template() {
@@ -52,10 +52,12 @@ describe('row details', () => {
 
   function openRowDetails(index) {
     grid.openItemDetails(grid._cache.items[index]);
+    flushGrid(grid);
   }
 
   function closeRowDetails(index) {
     grid.closeItemDetails(grid._cache.items[index]);
+    flushGrid(grid);
   }
 
   it('should not increase row update count', () => {
@@ -71,7 +73,7 @@ describe('row details', () => {
     grid.size = 1;
     grid.dataProvider = infiniteDataProvider;
     flushGrid(grid);
-    expect(spy.callCount).to.be.below(6);
+    expect(spy.callCount).to.be.below(5);
   });
 
   describe('simple', () => {
@@ -118,14 +120,6 @@ describe('row details', () => {
       expect(getRowCells(bodyRows[1])[1].hidden).to.be.true;
     });
 
-    it('should not update metrics or item positioning', () => {
-      const metricsSpy = sinon.spy(grid, '_updateMetrics');
-      const positionSpy = sinon.spy(grid, '_positionItems');
-      grid.openItemDetails({ nonExistentItem: true });
-      expect(metricsSpy.called).to.be.false;
-      expect(positionSpy.called).to.be.false;
-    });
-
     it('should close details row visually', () => {
       openRowDetails(1);
       closeRowDetails(1);
@@ -162,7 +156,11 @@ describe('row details', () => {
       openRowDetails(1);
       const cells = getRowCells(bodyRows[1]);
       cells[1].style.padding = '10px';
+      // Wait for the resize observer for details cell to invoke and change the row padding
       await nextFrame();
+      // Wait for the resize observer for virtualizer rows to invoke
+      await nextFrame();
+      await aTimeout(0);
       assertDetailsBounds();
     });
 
@@ -197,6 +195,34 @@ describe('row details', () => {
       grid.closeItemDetails({ value: 'foo0' });
       expect(cells[1].hidden).to.be.true;
     });
+
+    it('should invoke the body renderer when opening details', () => {
+      grid.renderer = sinon.spy();
+
+      openRowDetails(0);
+
+      grid.renderer.args.forEach(([_root, _owner, model], index) => {
+        if (index === 0) {
+          expect(model.detailsOpened).to.be.true;
+        } else {
+          expect(model.detailsOpened).to.be.false;
+        }
+      });
+    });
+
+    it('should invoke the body renderer when closing details', () => {
+      grid.renderer = sinon.spy();
+
+      openRowDetails(0);
+
+      grid.renderer.resetHistory();
+
+      closeRowDetails(0);
+
+      grid.renderer.args.forEach(([_root, _owner, model]) => {
+        expect(model.detailsOpened).to.be.false;
+      });
+    });
   });
 
   describe('inside a parent scope', () => {
@@ -211,10 +237,10 @@ describe('row details', () => {
     });
 
     it('should have the correct index on details template', () => {
-      // open details for item 0
+      // Open details for item 0
       grid.openItemDetails('foo');
 
-      // open details for item 1
+      // Open details for item 1
       grid.openItemDetails('bar');
 
       const firstRowCells = getRowCells(bodyRows[0]);
@@ -244,7 +270,7 @@ describe('row details', () => {
       expect(getBodyCellContent(grid, 0, 1).textContent.trim()).to.equal('0-details');
     });
 
-    it('should change the details template', () => {
+    it('should change the details template', async () => {
       grid.openItemDetails('foo');
 
       const newTemplate = document.createElement('template');
@@ -253,7 +279,10 @@ describe('row details', () => {
 
       container.innerHTML = '';
       container.appendChild(newTemplate);
+
+      await nextRender();
       flushGrid(grid);
+
       expect(getBodyCellContent(grid, 0, 1).textContent.trim()).to.equal('foo-bar');
     });
   });
@@ -327,7 +356,7 @@ describe('row details', () => {
 
     it('should be removed when item is removed', () => {
       openRowDetails(0);
-      dataset.shift(); // remove opened item
+      dataset.shift(); // Remove opened item
       grid.clearCache();
 
       expect(bodyRows[0].hasAttribute('details-opened')).to.be.false;
@@ -336,7 +365,7 @@ describe('row details', () => {
 
     it('should be removed when items are replaced', () => {
       openRowDetails(0);
-      dataset = buildDataSet(10); // replace data
+      dataset = buildDataSet(10); // Replace data
       grid.clearCache();
 
       expect(bodyRows[0].hasAttribute('details-opened')).to.be.false;
@@ -350,10 +379,47 @@ describe('row details', () => {
       });
       expect(countRowsMarkedAsDetailsOpened(grid)).to.equal(dataset.length);
 
-      dataset = buildDataSet(10); // replace data
+      dataset = buildDataSet(10); // Replace data
       grid.clearCache();
 
       expect(countRowsMarkedAsDetailsOpened(grid)).to.equal(0);
+    });
+  });
+
+  describe('lazily set details renderer', () => {
+    beforeEach(async () => {
+      grid = fixtureSync(`
+        <vaadin-grid>
+          <vaadin-grid-column path="name"></vaadin-grid-column>
+        </vaadin-grid>
+      `);
+      grid.items = [{ name: 'foo' }];
+      await nextFrame();
+      bodyRows = getRows(grid.$.items);
+    });
+
+    it('should have the details cell initially hidden', async () => {
+      grid.rowDetailsRenderer = () => {};
+      await nextFrame();
+      const detailsCell = bodyRows[0].querySelector('[part~="details-cell"]');
+      expect(detailsCell.hidden).to.be.true;
+    });
+
+    it('should have the details cell initially visible', async () => {
+      grid.detailsOpenedItems = [...grid.items];
+      grid.rowDetailsRenderer = () => {};
+      await nextFrame();
+      const detailsCell = bodyRows[0].querySelector('[part~="details-cell"]');
+      expect(detailsCell.hidden).to.be.false;
+    });
+
+    it('should have the details cell become visible when details opened', async () => {
+      grid.rowDetailsRenderer = () => {};
+      await nextFrame();
+      grid.detailsOpenedItems = [...grid.items];
+      await nextFrame();
+      const detailsCell = bodyRows[0].querySelector('[part~="details-cell"]');
+      expect(detailsCell.hidden).to.be.false;
     });
   });
 });

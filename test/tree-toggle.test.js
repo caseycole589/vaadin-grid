@@ -1,10 +1,11 @@
 import { expect } from '@esm-bundle/chai';
+import { click, fixtureSync } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { fixtureSync } from '@open-wc/testing-helpers';
-import { click, flushGrid, getBodyCellContent } from './helpers.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
 import '../vaadin-grid.js';
 import '../vaadin-grid-tree-toggle.js';
 import '../vaadin-grid-tree-column.js';
+import { flushGrid, getBodyCellContent } from './helpers.js';
 
 describe('tree toggle', () => {
   let toggle;
@@ -139,9 +140,48 @@ describe('tree toggle', () => {
       expect(toggle.leaf).to.be.true;
     });
 
-    it('should not be a leaf', () => {
-      column.itemHasChildrenPath = 'hasChildren';
-      expect(toggle.leaf).to.be.false;
+    it('should have the default level', () => {
+      expect(toggle.level).to.equal(0);
+    });
+
+    it('should ignore a custom renderer', () => {
+      column.renderer = (root) => {
+        root.innerHTML = 'cell';
+      };
+
+      expect(getBodyCellContent(grid, 0, 0).firstElementChild).to.equal(toggle);
+    });
+
+    describe('itemHasChildrenPath', () => {
+      beforeEach(() => {
+        sinon.stub(console, 'warn');
+      });
+
+      afterEach(() => {
+        console.warn.restore();
+      });
+
+      it('should have a higher level', () => {
+        column.itemHasChildrenPath = 'hasChildren';
+        toggle.expanded = true;
+        const childToggle = getBodyCellContent(grid, 1, 0).firstElementChild;
+        expect(childToggle.level).to.equal(1);
+      });
+
+      it('should not be a leaf', () => {
+        column.itemHasChildrenPath = 'hasChildren';
+        expect(toggle.leaf).to.be.false;
+      });
+
+      it('should warn when setting column property', () => {
+        column.itemHasChildrenPath = 'hasChildren';
+        expect(console.warn.called).to.be.true;
+      });
+
+      it('should forward column property to the grid', () => {
+        column.itemHasChildrenPath = 'hasChildren';
+        expect(grid.itemHasChildrenPath).to.equal('hasChildren');
+      });
     });
   });
 });

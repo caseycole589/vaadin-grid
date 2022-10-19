@@ -1,8 +1,14 @@
-import { GridColumnElement } from './vaadin-grid-column.js';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { GridDefaultItem } from './vaadin-grid.js';
+import { GridColumn } from './vaadin-grid-column.js';
 
 /**
  * `<vaadin-grid-filter-column>` is a helper element for the `<vaadin-grid>`
- * that provides default header template and functionality for filtering.
+ * that provides default header renderer and functionality for filtering.
  *
  * #### Example:
  * ```html
@@ -13,7 +19,7 @@ import { GridColumnElement } from './vaadin-grid-column.js';
  *    ...
  * ```
  */
-declare class GridFilterColumnElement extends GridColumnElement {
+declare class GridFilterColumn<TItem = GridDefaultItem> extends GridColumn<TItem> {
   /**
    * Text to display as the label of the column filter text-field.
    */
@@ -27,8 +33,8 @@ declare class GridFilterColumnElement extends GridColumnElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'vaadin-grid-filter-column': GridFilterColumnElement;
+    'vaadin-grid-filter-column': GridFilterColumn<GridDefaultItem>;
   }
 }
 
-export { GridFilterColumnElement };
+export { GridFilterColumn };

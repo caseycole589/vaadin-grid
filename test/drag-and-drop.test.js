@@ -1,11 +1,16 @@
 import { expect } from '@esm-bundle/chai';
+import { aTimeout, fixtureSync, listenOnce, nextFrame, oneEvent } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { fixtureSync, nextFrame, oneEvent, aTimeout } from '@open-wc/testing-helpers';
-import { flushGrid, getBodyCellContent, getFirstCell, getRows, listenOnce } from './helpers.js';
 import '../vaadin-grid.js';
+import { flushGrid, getBodyCellContent, getFirstCell, getRows } from './helpers.js';
 
 describe('drag and drop', () => {
   let grid, dragData;
+
+  const getTestItems = () => [
+    { first: 'foo', last: 'bar' },
+    { first: 'baz', last: 'qux' },
+  ];
 
   const getDraggable = (grid, rowIndex = 0) => {
     const row = Array.from(grid.$.items.children).filter((row) => row.index === rowIndex)[0];
@@ -17,12 +22,17 @@ describe('drag and drop', () => {
     const event = new Event('dragstart', {
       bubbles: true,
       cancelable: true,
-      composed: true
+      composed: true,
     });
     event.dataTransfer = {
       setDragImage: sinon.spy(),
-      setData: (type, data) => (dragData[type] = data)
+      setData: (type, data) => {
+        dragData[type] = data;
+      },
     };
+    const draggableRect = draggable.getBoundingClientRect();
+    event.clientX = draggableRect.left + draggableRect.width / 2;
+    event.clientY = draggableRect.top + draggableRect.height / 2;
     draggable.dispatchEvent(event);
     return event;
   };
@@ -31,7 +41,7 @@ describe('drag and drop', () => {
     const event = new Event('dragend', {
       bubbles: true,
       cancelable: true,
-      composed: true
+      composed: true,
     });
     draggable.dispatchEvent(event);
     return event;
@@ -41,7 +51,7 @@ describe('drag and drop', () => {
     const event = new Event('dragleave', {
       bubbles: true,
       cancelable: true,
-      composed: true
+      composed: true,
     });
     draggable.dispatchEvent(event);
   };
@@ -50,7 +60,7 @@ describe('drag and drop', () => {
     const event = new Event('dragenter', {
       bubbles: true,
       cancelable: true,
-      composed: true
+      composed: true,
     });
     draggable.dispatchEvent(event);
     return event;
@@ -60,11 +70,11 @@ describe('drag and drop', () => {
     const event = new Event('drop', {
       bubbles: true,
       cancelable: true,
-      composed: true
+      composed: true,
     });
     event.dataTransfer = {
       getData: (type) => dragData[type],
-      types: Object.keys(dragData)
+      types: Object.keys(dragData),
     };
     draggable.dispatchEvent(event);
     return event;
@@ -74,7 +84,7 @@ describe('drag and drop', () => {
     const event = new Event('dragover', {
       bubbles: true,
       cancelable: true,
-      composed: true
+      composed: true,
     });
     if (row) {
       const rect = row.getBoundingClientRect();
@@ -108,23 +118,11 @@ describe('drag and drop', () => {
     await aTimeout(1);
 
     dragData = {};
-    grid.items = [
-      { first: 'foo', last: 'bar' },
-      { first: 'baz', last: 'qux' }
-    ];
+    grid.items = getTestItems();
     flushGrid(grid);
     if (grid._safari) {
       await aTimeout();
     }
-  });
-
-  afterEach(() => {
-    fireDragEnd(grid.$.table);
-    fireDrop(grid.$.table);
-    grid.rowsDraggable = false;
-    grid.dropMode = null;
-    grid.style.height = '';
-    grid.selectedItems = [];
   });
 
   it('should not be draggable by default', () => {
@@ -180,7 +178,7 @@ describe('drag and drop', () => {
         const event = new Event('dragstart', {
           bubbles: true,
           cancelable: true,
-          composed: true
+          composed: true,
         });
         getBodyCellContent(grid, 0, 0).dispatchEvent(event);
         expect(spy.called).to.be.true;
@@ -189,7 +187,6 @@ describe('drag and drop', () => {
       it('should only use visible items for the row count state attribute', async () => {
         grid.style.height = '80px';
         flushGrid(grid);
-        grid.notifyResize();
         grid.selectedItems = grid.items;
 
         await aTimeout(0);
@@ -211,6 +208,13 @@ describe('drag and drop', () => {
         expect(row.getAttribute('dragstart')).to.equal('2');
         await nextFrame();
         expect(row.hasAttribute('dragstart')).to.be.false;
+      });
+
+      it('should add position properties to grid', () => {
+        grid.selectedItems = grid.items;
+        fireDragStart();
+        expect(grid.style.getPropertyValue('--_grid-drag-start-x')).to.be.ok;
+        expect(grid.style.getPropertyValue('--_grid-drag-start-y')).to.be.ok;
       });
 
       it('should override row count state attribute', () => {
@@ -335,15 +339,8 @@ describe('drag and drop', () => {
       });
 
       it('should generate drag image with offset', () => {
-        grid._ios = false;
         const event = fireDragStart();
         expect(event.dataTransfer.setDragImage.getCall(0).args.length).to.equal(3);
-      });
-
-      it('should generate drag image without offset', () => {
-        grid._ios = true;
-        const event = fireDragStart();
-        expect(event.dataTransfer.setDragImage.getCall(0).args.length).to.equal(1);
       });
     });
 
@@ -692,6 +689,45 @@ describe('drag and drop', () => {
       const row = getRows(grid.$.items)[0];
       expect(row.getAttribute('dragstart')).to.equal('');
     });
+
+    describe('filtering row drag - lazy loading', () => {
+      let finishLoadingItems;
+
+      beforeEach(() => {
+        grid.dataProvider = (_params, callback) => {
+          finishLoadingItems = (items) => callback(items || getTestItems());
+        };
+      });
+
+      it('should disable row drag while loading items', () => {
+        expect(getDraggable(grid, 1)).not.to.be.ok;
+        expect(grid.$.items.children[1].hasAttribute('drag-disabled')).to.be.true;
+      });
+
+      it('should enable row drag once loading has finished', () => {
+        finishLoadingItems();
+        expect(getDraggable(grid, 1)).to.be.ok;
+        expect(grid.$.items.children[1].hasAttribute('drag-disabled')).to.be.false;
+      });
+
+      it('should not run drag filter while loading items', () => {
+        grid.dragFilter = sinon.spy();
+        expect(grid.dragFilter.called).to.be.false;
+      });
+
+      it('should disable row drag for rows without an item', () => {
+        finishLoadingItems([getTestItems()[0], undefined]);
+        expect(getDraggable(grid, 1)).not.to.be.ok;
+        expect(grid.$.items.children[1].hasAttribute('drag-disabled')).to.be.true;
+      });
+
+      it('should enable row drag once items are available', () => {
+        finishLoadingItems([getTestItems()[0], undefined]);
+        finishLoadingItems();
+        expect(getDraggable(grid, 1)).to.be.ok;
+        expect(grid.$.items.children[1].hasAttribute('drag-disabled')).to.be.false;
+      });
+    });
   });
 
   describe('filtering row drop', () => {
@@ -748,12 +784,59 @@ describe('drag and drop', () => {
       const e = fireDragOver(row, 'above');
       expect(e.defaultPrevented).to.be.false;
     });
+
+    describe('filtering row drop - lazy loading', () => {
+      let finishLoadingItems;
+
+      beforeEach(() => {
+        grid.dataProvider = (_params, callback) => {
+          finishLoadingItems = (items) => callback(items || getTestItems());
+        };
+      });
+
+      it('should disable drop on row while loading items', () => {
+        const row = grid.$.items.children[1];
+        fireDragOver(row, 'above');
+        expect(row.hasAttribute('dragover')).to.be.false;
+        expect(row.hasAttribute('drop-disabled')).to.be.true;
+      });
+
+      it('should enable drop on row once loading has finished', () => {
+        finishLoadingItems();
+        const row = grid.$.items.children[1];
+        fireDragOver(row, 'above');
+        expect(row.hasAttribute('dragover')).to.be.true;
+        expect(row.hasAttribute('drop-disabled')).to.be.false;
+      });
+
+      it('should not run drop filter while loading items', () => {
+        grid.dropFilter = sinon.spy();
+        expect(grid.dropFilter.called).to.be.false;
+      });
+
+      it('should disable drop on row for rows without an item', () => {
+        finishLoadingItems([getTestItems()[0], undefined]);
+        const row = grid.$.items.children[1];
+        fireDragOver(row, 'above');
+        expect(row.hasAttribute('dragover')).to.be.false;
+        expect(row.hasAttribute('drop-disabled')).to.be.true;
+      });
+
+      it('should enable drop on row once items are available', () => {
+        finishLoadingItems([getTestItems()[0], undefined]);
+        finishLoadingItems();
+        const row = grid.$.items.children[1];
+        fireDragOver(row, 'above');
+        expect(row.hasAttribute('dragover')).to.be.true;
+        expect(row.hasAttribute('drop-disabled')).to.be.false;
+      });
+    });
   });
 
   describe('auto scroll', () => {
     beforeEach(async () => {
       grid.dropMode = 'between';
-      grid.items = Array(...new Array(100)).map(() => {});
+      grid.items = new Array(100).fill().map((_, idx) => ({ value: idx }));
 
       grid.$.table.scrollTop = 0;
       flushGrid(grid);
@@ -774,14 +857,14 @@ describe('drag and drop', () => {
     });
 
     it('should auto scroll up', () => {
-      grid._scrollToIndex(50);
+      grid.scrollToIndex(50);
       const scrollTop = grid.$.table.scrollTop;
       fireDragOver(grid.__getViewportRows()[0], 'below');
       expect(grid.$.table.scrollTop).to.be.within(scrollTop - 100, scrollTop - 20);
     });
 
     it('should auto scroll up fast', () => {
-      grid._scrollToIndex(50);
+      grid.scrollToIndex(50);
       const scrollTop = grid.$.table.scrollTop;
       fireDragOver(grid.__getViewportRows()[0], 'above');
       expect(grid.$.table.scrollTop).to.be.within(scrollTop - 200, scrollTop - 100);

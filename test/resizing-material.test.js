@@ -1,7 +1,7 @@
 import { expect } from '@esm-bundle/chai';
-import { fixtureSync } from '@open-wc/testing-helpers';
-import { flushGrid, infiniteDataProvider } from './helpers.js';
+import { fixtureSync } from '@vaadin/testing-helpers';
 import '../theme/material/vaadin-grid.js';
+import { flushGrid, infiniteDataProvider } from './helpers.js';
 
 describe('resizing material grid', () => {
   let grid;

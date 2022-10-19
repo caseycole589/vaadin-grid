@@ -1,27 +1,30 @@
-import { GridElement } from './vaadin-grid.js';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { Constructor } from '@open-wc/dedupe-mixin';
+import type { GridDefaultItem, GridItemModel } from './vaadin-grid.js';
 
-import { GridBodyRenderer, GridColumnTextAlign, GridHeaderFooterRenderer } from './interfaces';
+export type GridBodyRenderer<TItem> = (
+  root: HTMLElement,
+  column: GridColumn<TItem>,
+  model: GridItemModel<TItem>,
+) => void;
 
-declare function ColumnBaseMixin<T extends new (...args: any[]) => {}>(base: T): T & ColumnBaseMixinConstructor;
+export type GridColumnTextAlign = 'center' | 'end' | 'start' | null;
 
-interface ColumnBaseMixinConstructor {
-  new (...args: any[]): ColumnBaseMixin;
-}
+export type GridHeaderFooterRenderer<TItem> = (root: HTMLElement, column: GridColumn<TItem>) => void;
 
-export { ColumnBaseMixinConstructor };
+export declare function ColumnBaseMixin<TItem, T extends Constructor<HTMLElement>>(
+  base: T,
+): Constructor<ColumnBaseMixinClass<TItem>> & T;
 
-interface ColumnBaseMixin {
-  readonly _grid: GridElement | undefined;
-  readonly _allCells: HTMLElement[];
-
+export declare class ColumnBaseMixinClass<TItem> {
   /**
    * When set to true, the column is user-resizable.
    */
   resizable: boolean | null | undefined;
-
-  _headerTemplate: HTMLTemplateElement | null;
-
-  _footerTemplate: HTMLTemplateElement | null;
 
   /**
    * When true, the column is frozen. When a column inside of a column group is frozen,
@@ -30,9 +33,20 @@ interface ColumnBaseMixin {
   frozen: boolean;
 
   /**
+   * When true, the column is frozen to end of grid.
+   *
+   * When a column inside of a column group is frozen to end, all of the sibling columns
+   * inside the group will get frozen to end also.
+   *
+   * Column can not be set as `frozen` and `frozenToEnd` at the same time.
+   * @attr {boolean} frozen-to-end
+   */
+  frozenToEnd: boolean;
+
+  /**
    * When set to true, the cells for this column are hidden.
    */
-  hidden: boolean | null | undefined;
+  hidden: boolean;
 
   /**
    * Text content to display in the header cell of the column.
@@ -46,12 +60,6 @@ interface ColumnBaseMixin {
    */
   textAlign: GridColumnTextAlign | null | undefined;
 
-  _lastFrozen: boolean;
-
-  _order: number | null | undefined;
-
-  _emptyCells: HTMLElement[] | null;
-
   /**
    * Custom function for rendering the header content.
    * Receives two arguments:
@@ -59,7 +67,7 @@ interface ColumnBaseMixin {
    * - `root` The header cell content DOM element. Append your content to it.
    * - `column` The `<vaadin-grid-column>` element.
    */
-  headerRenderer: GridHeaderFooterRenderer | null | undefined;
+  headerRenderer: GridHeaderFooterRenderer<TItem> | null | undefined;
 
   /**
    * Custom function for rendering the footer content.
@@ -68,50 +76,17 @@ interface ColumnBaseMixin {
    * - `root` The footer cell content DOM element. Append your content to it.
    * - `column` The `<vaadin-grid-column>` element.
    */
-  footerRenderer: GridHeaderFooterRenderer | null | undefined;
-
-  _findHostGrid(): GridElement | undefined;
-
-  _prepareHeaderTemplate(): HTMLTemplateElement | null;
-
-  _prepareFooterTemplate(): HTMLTemplateElement | null;
-
-  _prepareBodyTemplate(): HTMLTemplateElement | null;
-
-  _prepareTemplatizer(template: HTMLTemplateElement | null, instanceProps: object | null): HTMLTemplateElement | null;
-
-  _renderHeaderAndFooter(): void;
-
-  _selectFirstTemplate(header?: boolean, footer?: boolean): HTMLTemplateElement | null;
-
-  _findTemplate(header: boolean, footer: boolean): HTMLTemplateElement | null;
-
-  _pathOrHeaderChanged(
-    path: string | undefined,
-    header: string | undefined,
-    headerCell: HTMLTableCellElement | undefined,
-    footerCell: HTMLTableCellElement | undefined,
-    cells: object | undefined,
-    renderer: GridBodyRenderer | null | undefined,
-    headerRenderer: GridHeaderFooterRenderer | null | undefined,
-    bodyTemplate: HTMLTemplateElement | null | undefined,
-    headerTemplate: HTMLTemplateElement | null | undefined
-  ): void;
-
-  _generateHeader(path: string): string;
-
-  _toggleAttribute(name: string, bool: boolean, node: Element): void;
+  footerRenderer: GridHeaderFooterRenderer<TItem> | null | undefined;
 }
 
 /**
  * A `<vaadin-grid-column>` is used to configure how a column in `<vaadin-grid>`
  * should look like.
  *
- * See `<vaadin-grid>` documentation and demos for instructions and examples on how
+ * See [`<vaadin-grid>`](#/elements/vaadin-grid) documentation for instructions on how
  * to configure the `<vaadin-grid-column>`.
- * ```
  */
-declare class GridColumnElement extends ColumnBaseMixin(HTMLElement) {
+declare class GridColumn<TItem = GridDefaultItem> extends HTMLElement {
   /**
    * Width of the cells for this column.
    */
@@ -136,8 +111,9 @@ declare class GridColumnElement extends ColumnBaseMixin(HTMLElement) {
    *   - `model.expanded` Sublevel toggle state.
    *   - `model.level` Level of the tree represented with a horizontal offset of the toggle button.
    *   - `model.selected` Selected state.
+   *   - `model.detailsOpened` Details opened state.
    */
-  renderer: GridBodyRenderer | null | undefined;
+  renderer: GridBodyRenderer<TItem> | null | undefined;
 
   /**
    * Path to an item sub-property whose value gets displayed in the column body cells.
@@ -162,16 +138,14 @@ declare class GridColumnElement extends ColumnBaseMixin(HTMLElement) {
    * @attr {boolean} auto-width
    */
   autoWidth: boolean;
-
-  _bodyTemplate: HTMLTemplateElement | null;
-
-  _cells: HTMLElement[] | null;
 }
+
+interface GridColumn<TItem = GridDefaultItem> extends ColumnBaseMixinClass<TItem> {}
 
 declare global {
   interface HTMLElementTagNameMap {
-    'vaadin-grid-column': GridColumnElement;
+    'vaadin-grid-column': GridColumn<GridDefaultItem>;
   }
 }
 
-export { ColumnBaseMixin, GridColumnElement };
+export { GridColumn };

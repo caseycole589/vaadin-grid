@@ -1,37 +1,17 @@
-import { GridDataProviderCallback, GridDataProviderParams, GridItem, GridFilter, GridSorter } from './interfaces';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { Constructor } from '@open-wc/dedupe-mixin';
 
-declare function ArrayDataProviderMixin<T extends new (...args: any[]) => {}>(
-  base: T
-): T & ArrayDataProviderMixinConstructor;
+export declare function ArrayDataProviderMixin<TItem, T extends Constructor<HTMLElement>>(
+  base: T,
+): Constructor<ArrayDataProviderMixinClass<TItem>> & T;
 
-interface ArrayDataProviderMixinConstructor {
-  new (...args: any[]): ArrayDataProviderMixin;
-}
-
-interface ArrayDataProviderMixin {
+export declare class ArrayDataProviderMixinClass<TItem> {
   /**
-   * An array containing the items which will be stamped to the column template
-   * instances.
+   * An array containing the items which will be passed to renderer functions.
    */
-  items: GridItem[] | null | undefined;
-
-  _arrayDataProvider(opts: GridDataProviderParams | null, cb: GridDataProviderCallback | null): void;
-
-  /**
-   * Check array of filters/sorters for paths validity, console.warn invalid items
-   *
-   * @param arrayToCheck The array of filters/sorters to check
-   * @param action The name of action to include in warning (filtering, sorting)
-   */
-  _checkPaths(arrayToCheck: Array<GridFilter | GridSorter>, action: string, items: GridItem[]): any;
-
-  _multiSort(a: unknown | null, b: unknown | null): number;
-
-  _normalizeEmptyValue(value: unknown | null): string;
-
-  _compare(a: unknown | null, b: unknown | null): number;
-
-  _filter(items: GridItem[]): GridItem[];
+  items: TItem[] | null | undefined;
 }
-
-export { ArrayDataProviderMixin, ArrayDataProviderMixinConstructor };

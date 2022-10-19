@@ -1,10 +1,13 @@
-declare function ScrollMixin<T extends new (...args: any[]) => {}>(base: T): T & ScrollMixinConstructor;
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { Constructor } from '@open-wc/dedupe-mixin';
 
-interface ScrollMixinConstructor {
-  new (...args: any[]): ScrollMixin;
-}
+export declare function ScrollMixin<T extends Constructor<HTMLElement>>(base: T): Constructor<ScrollMixinClass> & T;
 
-interface ScrollMixin {
+export declare class ScrollMixinClass {
   /**
    * Scroll to a specific row index in the virtual list. Note that the row index is
    * not always the same for any particular item. For example, sorting/filtering/expanding
@@ -13,12 +16,4 @@ interface ScrollMixin {
    * @param index Row index to scroll to
    */
   scrollToIndex(index: number): void;
-
-  _frozenCellsChanged(): void;
-
-  _updateScrollerMeasurements(): void;
-
-  _updateLastFrozen(): void;
 }
-
-export { ScrollMixin, ScrollMixinConstructor };

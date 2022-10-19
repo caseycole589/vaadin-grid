@@ -1,12 +1,12 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
-import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
-import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
-import { timeOut } from '@polymer/polymer/lib/utils/async.js';
-import '@vaadin/vaadin-text-field/src/vaadin-text-field.js';
+import '@vaadin/text-field/src/vaadin-text-field.js';
+import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
+import { timeOut } from '@vaadin/component-base/src/async.js';
+import { Debouncer } from '@vaadin/component-base/src/debounce.js';
 
 /**
  * `<vaadin-grid-filter>` is a helper element for the `<vaadin-grid>` that provides out-of-the-box UI controls,
@@ -14,17 +14,28 @@ import '@vaadin/vaadin-text-field/src/vaadin-text-field.js';
  *
  * #### Example:
  * ```html
- * <vaadin-grid-column>
- *   <template class="header">
- *     <vaadin-grid-filter path="name.first"></vaadin-grid-filter>
- *   </template>
- *   <template>[[item.name.first]]</template>
- * </vaadin-grid-column>
+ * <vaadin-grid-column id="column"></vaadin-grid-column>
+ * ```
+ * ```js
+ * const column = document.querySelector('#column');
+ * column.headerRenderer = (root, column) => {
+ *   let filter = root.firstElementChild;
+ *   if (!filter) {
+ *     filter = document.createElement('vaadin-grid-filter');
+ *     root.appendChild(filter);
+ *   }
+ *   filter.path = 'name.first';
+ * };
+ * column.renderer = (root, column, model) => {
+ *   root.textContent = model.item.name.first;
+ * };
  * ```
  *
  * @fires {CustomEvent} value-changed - Fired when the `value` property changes.
+ *
+ * @extends HTMLElement
  */
-class GridFilterElement extends PolymerElement {
+class GridFilter extends class extends PolymerElement {} {
   static get template() {
     return html`
       <style>
@@ -60,11 +71,11 @@ class GridFilterElement extends PolymerElement {
        */
       value: {
         type: String,
-        notify: true
+        notify: true,
       },
 
       /** @private */
-      _connected: Boolean
+      _connected: Boolean,
     };
   }
 
@@ -109,6 +120,6 @@ class GridFilterElement extends PolymerElement {
   }
 }
 
-customElements.define(GridFilterElement.is, GridFilterElement);
+customElements.define(GridFilter.is, GridFilter);
 
-export { GridFilterElement };
+export { GridFilter };

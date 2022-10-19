@@ -1,6 +1,6 @@
-import { registerStyles, css } from '@vaadin/vaadin-themable-mixin/register-styles.js';
 import '@vaadin/vaadin-material-styles/color.js';
 import '@vaadin/vaadin-material-styles/font-icons.js';
+import { css, registerStyles } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
 
 registerStyles(
   'vaadin-grid-sorter',
@@ -68,5 +68,5 @@ registerStyles(
       right: auto;
     }
   `,
-  { moduleId: 'material-grid-sorter' }
+  { moduleId: 'material-grid-sorter' },
 );

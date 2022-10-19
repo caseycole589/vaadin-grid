@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
 
@@ -28,12 +28,14 @@ export const EventContextMixin = (superClass) =>
      * the event targets the empty part of the grid body.
      *
      * @param {!Event} event
-     * @return {GridEventContext | object}
+     * @return {GridEventContext}
      */
     getEventContext(event) {
       const context = {};
 
-      const path = event.composedPath();
+      // Use `composedPath()` stored by vaadin-context-menu gesture
+      // to avoid problem when accessing it after a timeout on iOS
+      const path = event.__composedPath || event.composedPath();
       const cell = path[path.indexOf(this.$.table) - 3];
 
       if (!cell) {
@@ -41,7 +43,7 @@ export const EventContextMixin = (superClass) =>
       }
 
       context.section = ['body', 'header', 'footer', 'details'].filter(
-        (section) => cell.getAttribute('part').indexOf(section) > -1
+        (section) => cell.getAttribute('part').indexOf(section) > -1,
       )[0];
 
       if (cell._column) {

@@ -1,13 +1,19 @@
 /**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+
+/**
  * Fired when the `value` property changes.
  */
-export type GridFilterValueChanged = CustomEvent<{ value: string }>
+export type GridFilterValueChangedEvent = CustomEvent<{ value: string }>;
 
-export interface GridFilterElementEventMap {
-  'value-changed': GridFilterValueChanged;
+export interface GridFilterCustomEventMap {
+  'value-changed': GridFilterValueChangedEvent;
 }
 
-export interface GridFilterEventMap extends HTMLElementEventMap, GridFilterElementEventMap {}
+export interface GridFilterEventMap extends HTMLElementEventMap, GridFilterCustomEventMap {}
 
 /**
  * `<vaadin-grid-filter>` is a helper element for the `<vaadin-grid>` that provides out-of-the-box UI controls,
@@ -15,17 +21,26 @@ export interface GridFilterEventMap extends HTMLElementEventMap, GridFilterEleme
  *
  * #### Example:
  * ```html
- * <vaadin-grid-column>
- *   <template class="header">
- *     <vaadin-grid-filter path="name.first"></vaadin-grid-filter>
- *   </template>
- *   <template>[[item.name.first]]</template>
- * </vaadin-grid-column>
+ * <vaadin-grid-column id="column"></vaadin-grid-column>
+ * ```
+ * ```js
+ * const column = document.querySelector('#column');
+ * column.headerRenderer = (root, column) => {
+ *   let filter = root.firstElementChild;
+ *   if (!filter) {
+ *     filter = document.createElement('vaadin-grid-filter');
+ *     root.appendChild(filter);
+ *   }
+ *   filter.path = 'name.first';
+ * };
+ * column.renderer = (root, column, model) => {
+ *   root.textContent = model.item.name.first;
+ * };
  * ```
  *
  * @fires {CustomEvent} value-changed - Fired when the `value` property changes.
  */
-declare class GridFilterElement extends HTMLElement {
+declare class GridFilter extends HTMLElement {
   /**
    * JS Path of the property in the item used for filtering the data.
    */
@@ -38,21 +53,21 @@ declare class GridFilterElement extends HTMLElement {
 
   addEventListener<K extends keyof GridFilterEventMap>(
     type: K,
-    listener: (this: GridFilterElement, ev: GridFilterEventMap[K]) => void,
-    options?: boolean | AddEventListenerOptions
+    listener: (this: GridFilter, ev: GridFilterEventMap[K]) => void,
+    options?: AddEventListenerOptions | boolean,
   ): void;
 
   removeEventListener<K extends keyof GridFilterEventMap>(
     type: K,
-    listener: (this: GridFilterElement, ev: GridFilterEventMap[K]) => void,
-    options?: boolean | EventListenerOptions
+    listener: (this: GridFilter, ev: GridFilterEventMap[K]) => void,
+    options?: EventListenerOptions | boolean,
   ): void;
 }
 
 declare global {
   interface HTMLElementTagNameMap {
-    'vaadin-grid-filter': GridFilterElement;
+    'vaadin-grid-filter': GridFilter;
   }
 }
 
-export { GridFilterElement };
+export { GridFilter };

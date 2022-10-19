@@ -1,85 +1,36 @@
 import { expect } from '@esm-bundle/chai';
-import sinon from 'sinon';
-import { aTimeout, fixtureSync, nextFrame } from '@open-wc/testing-helpers/index-no-side-effects.js';
 import {
+  aTimeout,
+  down as mouseDown,
+  fixtureSync,
+  focusin,
+  isChrome,
+  isDesktopSafari,
+  keyboardEventFor,
   keyDownOn,
   keyUpOn,
-  down as mouseDown,
+  listenOnce,
+  nextFrame,
   up as mouseUp,
-  keyboardEventFor
-} from '@polymer/iron-test-helpers/mock-interactions.js';
+} from '@vaadin/testing-helpers';
+import { sendKeys } from '@web/test-runner-commands';
+import sinon from 'sinon';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
+import '../vaadin-grid.js';
+import '../vaadin-grid-tree-column.js';
+import '../vaadin-grid-column-group.js';
+import '../vaadin-grid-selection-column.js';
 import {
   flushGrid,
   getCell,
   getCellContent,
   getContainerCell,
-  getRows,
+  getLastVisibleItem,
   getRowCells,
+  getRows,
   infiniteDataProvider,
-  listenOnce,
-  scrollToEnd
+  scrollToEnd,
 } from './helpers.js';
-import '../vaadin-grid.js';
-import '../vaadin-grid-column-group.js';
-
-window.top.focus && window.top.focus();
-window.focus();
-
-if (
-  (window.chrome ||
-    /HeadlessChrome/.test(window.navigator.userAgent) ||
-    window.navigator.userAgent.toLowerCase().indexOf('firefox') > -1) &&
-  !window.document.hasFocus()
-) {
-  // Oh no! Focus kinda works, but no native events are dispatched. Let’s fake them.
-  const nativeFocus = HTMLElement.prototype.focus;
-  let fakeFocusCurrentTarget, recursiveFocusInterrupt;
-  HTMLElement.prototype.focus = function () {
-    const dispatchMockFocusEvent = function (type, bubbles, composed, target, relatedTarget) {
-      if (!target) {
-        return;
-      }
-      const e = new CustomEvent(type, { bubbles, composed: composed });
-      e.relatedTarget = relatedTarget;
-      target.dispatchEvent(e);
-    };
-
-    let activeElement,
-      recursiveFocusInvoke = false;
-    if (fakeFocusCurrentTarget) {
-      // When focus is called from a focusin/focusout listener (e. g.,
-      // recursive .focus()), activeElement might not be shifted yet.
-      // The true activeElement is a target of the previous .focus call.
-      activeElement = fakeFocusCurrentTarget;
-      recursiveFocusInvoke = true;
-    } else {
-      activeElement = document.activeElement;
-      if (activeElement) {
-        while (activeElement.shadowRoot && activeElement.shadowRoot.activeElement) {
-          activeElement = activeElement.shadowRoot.activeElement;
-        }
-      }
-    }
-
-    if (activeElement === this) {
-      // Prevent duplicate events when focus stays on the same element
-      nativeFocus.apply(this, arguments);
-    } else {
-      fakeFocusCurrentTarget = this;
-      // If shadow roots match, the events are shadow-internal, not composed
-      const composed = this.getRootNode() !== activeElement.getRootNode();
-      dispatchMockFocusEvent('focusout', true, composed, activeElement, this);
-      !recursiveFocusInterrupt && dispatchMockFocusEvent('focusin', true, composed, this, activeElement);
-      !recursiveFocusInterrupt && nativeFocus.apply(this, arguments);
-      !recursiveFocusInterrupt && dispatchMockFocusEvent('blur', false, composed, activeElement, this);
-      !recursiveFocusInterrupt && dispatchMockFocusEvent('focus', false, composed, this, activeElement);
-      fakeFocusCurrentTarget = undefined;
-    }
-
-    // Recursive focus invoke should interrupt the parent
-    recursiveFocusInterrupt = recursiveFocusInvoke;
-  };
-}
 
 let grid, focusable, scroller, header, footer, body;
 
@@ -99,10 +50,19 @@ function getRowFirstCell(rowIndex) {
   return getRowCell(rowIndex, 0);
 }
 
-function focusFirstBodyInput(rowIndex) {
-  const cell = getRowCell(rowIndex || 0, 1);
-
+function getCellInput(rowIndex, colIndex) {
+  const cell = getRowCell(rowIndex, colIndex);
   const input = getCellContent(cell).children[0];
+
+  if (!input.nodeName || input.nodeName.toLowerCase() !== 'input') {
+    throw new Error('Cell does not contain an input');
+  }
+
+  return input;
+}
+
+function focusFirstBodyInput(rowIndex) {
+  const input = getCellInput(rowIndex || 0, 1);
   input.focus();
   return input;
 }
@@ -220,8 +180,12 @@ function getTabbableElements(root) {
   return root.querySelectorAll('[tabindex]:not([tabindex="-1"])');
 }
 
+function getTabbableCells(root) {
+  return root.querySelectorAll('tr:not([hidden]) *:is(td, th)[tabindex]:not([tabindex="-1"])');
+}
+
 describe('keyboard navigation', () => {
-  before(async () => {
+  beforeEach(async () => {
     grid = fixtureSync(`
       <vaadin-grid theme="no-border">
         <template class="row-details">
@@ -263,6 +227,8 @@ describe('keyboard navigation', () => {
     body = grid.$.items;
     footer = grid.$.footer;
 
+    grid.items = ['foo', 'bar'];
+
     grid._observer.flush();
     flushGrid(grid);
 
@@ -271,38 +237,6 @@ describe('keyboard navigation', () => {
     grid.parentNode.appendChild(focusable);
 
     await aTimeout(0);
-  });
-
-  after(() => {
-    focusable.remove();
-    grid.remove();
-  });
-
-  beforeEach(() => {
-    // Reset side effects from tests
-    grid.style.width = '';
-    grid.style.border = '';
-
-    if (grid.items[0] !== 'foo' || grid.items[1] !== 'bar') {
-      grid.size = undefined;
-      grid.dataProvider = undefined;
-      grid.items = ['foo', 'bar'];
-      flushGrid(grid);
-    }
-    grid.activeItem = null;
-    grid.detailsOpenedItems = [];
-    grid._columnTree[0].forEach((column) => {
-      column.hidden = false;
-      column.frozen = false;
-    });
-
-    grid._focusedItemIndex = 0;
-    grid._focusedColumnOrder = undefined;
-    grid._resetKeyboardNavigation();
-    grid.removeAttribute('navigating');
-
-    focusable.focus();
-    flushGrid(grid);
   });
 
   describe('navigation mode', () => {
@@ -326,7 +260,7 @@ describe('keyboard navigation', () => {
     });
 
     it('should enable navigation mode when tabbed into header', () => {
-      // simulating tabbing into header
+      // Simulating tabbing into header
       tabToHeader();
 
       expect(grid.hasAttribute('navigating')).to.be.true;
@@ -341,7 +275,7 @@ describe('keyboard navigation', () => {
     });
 
     it('should enable navigation mode when tabbed into footer', () => {
-      // simulating tabbing into footer
+      // Simulating tabbing into footer
       focusable.focus();
       shiftTabToFooter();
 
@@ -409,6 +343,25 @@ describe('keyboard navigation', () => {
 
       expect(grid.hasAttribute('navigating')).to.be.false;
     });
+
+    it('should enable navigation mode on header navigation', () => {
+      focusFirstHeaderCell();
+
+      right();
+
+      expect(grid.hasAttribute('navigating')).to.be.true;
+    });
+
+    it('should not leave navigation mode on enter in a cell with only non-focusable elements', async () => {
+      // Focus a cell with only non-focusable elements
+      focusItem(0);
+      await sendKeys({ press: 'ArrowRight' });
+      await sendKeys({ press: 'ArrowRight' });
+      // Press Enter
+      await sendKeys({ press: 'Enter' });
+      // Since the element (span) in the cell isn't focusable, the grid should stay in navigation mode
+      expect(grid.hasAttribute('navigating')).to.be.true;
+    });
   });
 
   describe('navigating with tab', () => {
@@ -447,18 +400,20 @@ describe('keyboard navigation', () => {
       const tabbableElements = getTabbableElements(grid.shadowRoot);
 
       let keydownEvent;
-      const listener = (e) => (keydownEvent = e);
+      const listener = (e) => {
+        keydownEvent = e;
+      };
 
-      // assuming grid has been tabbed into.
+      // Assuming grid has been tabbed into.
       tabbableElements[1].focus();
 
       listenOnce(scroller, 'keydown', listener);
-      tab(); // to body cell
+      tab(); // To body cell
       expect(keydownEvent.defaultPrevented).to.be.true;
       expect(grid.shadowRoot.activeElement).to.equal(tabbableElements[2]);
 
       listenOnce(scroller, 'keydown', listener);
-      tab(); // to footer cell
+      tab(); // To footer cell
       expect(keydownEvent.defaultPrevented).to.be.true;
       expect(grid.shadowRoot.activeElement).to.equal(tabbableElements[3]);
     });
@@ -467,18 +422,20 @@ describe('keyboard navigation', () => {
       const tabbableElements = getTabbableElements(grid.shadowRoot);
 
       let keydownEvent;
-      const listener = (e) => (keydownEvent = e);
+      const listener = (e) => {
+        keydownEvent = e;
+      };
 
-      // assuming grid has been shift-tabbed into.
+      // Assuming grid has been shift-tabbed into.
       tabbableElements[3].focus();
 
       listenOnce(grid.$.scroller, 'keydown', listener);
-      shiftTab(); // to body cell
+      shiftTab(); // To body cell
       expect(keydownEvent.defaultPrevented).to.be.true;
       expect(grid.shadowRoot.activeElement).to.equal(tabbableElements[2]);
 
       listenOnce(grid.$.scroller, 'keydown', listener);
-      shiftTab(); // to header cell
+      shiftTab(); // To header cell
       expect(keydownEvent.defaultPrevented).to.be.true;
       expect(grid.shadowRoot.activeElement).to.equal(tabbableElements[1]);
     });
@@ -490,18 +447,20 @@ describe('keyboard navigation', () => {
       const tabbableElements = getTabbableElements(grid.shadowRoot);
 
       let keydownEvent;
-      const listener = (e) => (keydownEvent = e);
+      const listener = (e) => {
+        keydownEvent = e;
+      };
 
-      // assuming grid has been tabbed into.
+      // Assuming grid has been tabbed into.
       tabbableElements[1].focus();
 
       listenOnce(grid.$.scroller, 'keydown', listener);
-      tab(); // to body cell
+      tab(); // To body cell
       expect(keydownEvent.defaultPrevented).to.be.true;
       expect(grid.shadowRoot.activeElement).to.equal(tabbableElements[2]);
 
       listenOnce(grid.$.scroller, 'keydown', listener);
-      tab(); // to footer cell
+      tab(); // To footer cell
       expect(keydownEvent.defaultPrevented).to.be.true;
       expect(grid.shadowRoot.activeElement).to.equal(tabbableElements[3]);
     });
@@ -513,28 +472,32 @@ describe('keyboard navigation', () => {
       const tabbableElements = getTabbableElements(grid.shadowRoot);
 
       let keydownEvent;
-      const listener = (e) => (keydownEvent = e);
+      const listener = (e) => {
+        keydownEvent = e;
+      };
 
-      // assuming grid has been shift-tabbed into.
+      // Assuming grid has been shift-tabbed into.
       tabbableElements[3].focus();
 
       listenOnce(grid.$.scroller, 'keydown', listener);
-      shiftTab(); // to body cell
+      shiftTab(); // To body cell
       expect(keydownEvent.defaultPrevented).to.be.true;
       expect(grid.shadowRoot.activeElement).to.equal(tabbableElements[2]);
 
       listenOnce(grid.$.scroller, 'keydown', listener);
-      shiftTab(); // to header cell
+      shiftTab(); // To header cell
       expect(keydownEvent.defaultPrevented).to.be.true;
       expect(grid.shadowRoot.activeElement).to.equal(tabbableElements[1]);
     });
 
     it('should be possible to exit grid with tab', () => {
       const tabbableElements = getTabbableElements(grid.shadowRoot);
-      tabbableElements[3].focus(); // focus footer cell
+      tabbableElements[3].focus(); // Focus footer cell
 
       let keydownEvent;
-      listenOnce(grid.shadowRoot.activeElement, 'keydown', (e) => (keydownEvent = e));
+      listenOnce(grid.shadowRoot.activeElement, 'keydown', (e) => {
+        keydownEvent = e;
+      });
       tab();
 
       // Expect programmatic focus on focus exit element
@@ -545,10 +508,12 @@ describe('keyboard navigation', () => {
 
     it('should be possible to exit grid with shift+tab', () => {
       const tabbableElements = getTabbableElements(grid.shadowRoot);
-      tabbableElements[1].focus(); // focus header cell
+      tabbableElements[1].focus(); // Focus header cell
 
       let keydownEvent;
-      listenOnce(grid.shadowRoot.activeElement, 'keydown', (e) => (keydownEvent = e));
+      listenOnce(grid.shadowRoot.activeElement, 'keydown', (e) => {
+        keydownEvent = e;
+      });
       shiftTab();
 
       // Expect programmatic focus on focus exit element
@@ -560,10 +525,8 @@ describe('keyboard navigation', () => {
     it('should be possible to enter grid with tab', () => {
       const tabbableElements = getTabbableElements(grid.shadowRoot);
 
-      // focusin on table element — same as tab from above the grid
-      const event = new CustomEvent('focusin', { bubbles: true, composed: true });
-      event.relatedTarget = focusable;
-      tabbableElements[0].dispatchEvent(event);
+      // Focusin on table element — same as tab from above the grid
+      focusin(tabbableElements[0], focusable);
 
       // Expect programmatic focus on header cell
       expect(grid.shadowRoot.activeElement).to.equal(tabbableElements[1]);
@@ -572,10 +535,8 @@ describe('keyboard navigation', () => {
     it('should be possible to enter grid with shift+tab', () => {
       const tabbableElements = getTabbableElements(grid.shadowRoot);
 
-      // focusin on focusexit element — same as shift+tab from below the grid
-      const event = new CustomEvent('focusin', { bubbles: true, composed: true });
-      event.relatedTarget = focusable;
-      tabbableElements[4].dispatchEvent(event);
+      // Focusin on focusexit element — same as shift+tab from below the grid
+      focusin(tabbableElements[4], focusable);
 
       // Expect programmatic focus on footer cell
       expect(grid.shadowRoot.activeElement).to.equal(tabbableElements[3]);
@@ -761,6 +722,24 @@ describe('keyboard navigation', () => {
       });
     });
 
+    describe('mixing keyboard and mouse', () => {
+      it('should update column after mousedown on other cell', () => {
+        // Focus cell in third column
+        focusWithMouse(getRowCell(0, 2));
+
+        down();
+
+        expect(getFocusedCellIndex()).to.equal(2);
+
+        // Focus cell in first column
+        focusWithMouse(getRowCell(0, 0));
+
+        down();
+
+        expect(getFocusedCellIndex()).to.equal(0);
+      });
+    });
+
     describe('with hidden columns', () => {
       it('should skip over hidden column with right arrow', () => {
         grid._columnTree[0][1].hidden = true;
@@ -808,7 +787,7 @@ describe('keyboard navigation', () => {
         expect(getFocusedCellIndex()).to.equal(1);
       });
 
-      it('should not navigate to hidden column with end', () => {
+      it('should not navigate to hidden column with home', () => {
         grid._columnTree[0][0].hidden = true;
         flushGrid(grid);
 
@@ -821,7 +800,7 @@ describe('keyboard navigation', () => {
         expect(columnFocusedCell.hidden).to.be.false;
       });
 
-      it('should not navigate to hidden column with home', () => {
+      it('should not navigate to hidden column with end', () => {
         grid._columnTree[0][2].hidden = true;
         flushGrid(grid);
 
@@ -848,12 +827,12 @@ describe('keyboard navigation', () => {
       }
 
       it('should not navigate to row details with right arrow', () => {
-        right(); // index 1
-        right(); // index 2
+        right(); // Index 1
+        right(); // Index 2
 
         right();
         expect(findRowDetailsCell(grid.shadowRoot.activeElement.parentNode)).to.not.equal(
-          grid.shadowRoot.activeElement
+          grid.shadowRoot.activeElement,
         );
         expect(getFocusedCellIndex()).to.equal(2);
       });
@@ -863,7 +842,7 @@ describe('keyboard navigation', () => {
 
         expect(getFocusedCellIndex()).to.equal(2);
         expect(findRowDetailsCell(grid.shadowRoot.activeElement.parentNode)).to.not.equal(
-          grid.shadowRoot.activeElement
+          grid.shadowRoot.activeElement,
         );
       });
 
@@ -880,7 +859,7 @@ describe('keyboard navigation', () => {
         down();
 
         expect(findRowDetailsCell(grid.shadowRoot.activeElement.parentNode)).to.not.equal(
-          grid.shadowRoot.activeElement
+          grid.shadowRoot.activeElement,
         );
         expect(getFocusedRowIndex()).to.equal(1);
         expect(getFocusedCellIndex()).to.equal(0);
@@ -916,17 +895,6 @@ describe('keyboard navigation', () => {
         expect(getFocusedCellIndex()).to.equal(0);
       });
 
-      it('should not navigate left while in details', () => {
-        right();
-        down();
-
-        left();
-        down();
-
-        expect(getFocusedRowIndex()).to.equal(1);
-        expect(getFocusedCellIndex()).to.equal(1);
-      });
-
       it('should not navigate to home while in details', () => {
         right();
         down();
@@ -957,7 +925,7 @@ describe('keyboard navigation', () => {
         up();
 
         expect(findRowDetailsCell(grid.shadowRoot.activeElement.parentNode)).to.not.equal(
-          grid.shadowRoot.activeElement
+          grid.shadowRoot.activeElement,
         );
         expect(getFocusedRowIndex()).to.equal(0);
         expect(getFocusedCellIndex()).to.equal(0);
@@ -992,13 +960,14 @@ describe('keyboard navigation', () => {
       expect(getFocusedCellIndex()).to.equal(0);
     });
 
-    it('should focus first cell on first row with ctrl+home', () => {
+    it('should focus first cell in the column with ctrl+home', () => {
       focusItem(0);
+      // Move the focus to the second column
       right();
 
       ctrlHome();
 
-      expect(getFocusedCellIndex()).to.equal(0);
+      expect(getFocusedCellIndex()).to.equal(1);
       expect(getFocusedRowIndex()).to.equal(0);
     });
 
@@ -1010,12 +979,12 @@ describe('keyboard navigation', () => {
       expect(getFocusedCellIndex()).to.equal(2);
     });
 
-    it('should focus last cell on last row with ctrl+end', () => {
+    it('should focus last cell in the column with ctrl+end', () => {
       focusItem(0);
 
       ctrlEnd();
 
-      expect(getFocusedCellIndex()).to.equal(2);
+      expect(getFocusedCellIndex()).to.equal(0);
       expect(getFocusedRowIndex()).to.equal(1);
     });
 
@@ -1029,12 +998,12 @@ describe('keyboard navigation', () => {
 
       ctrlEnd();
 
-      expect(grid.shadowRoot.activeElement.parentNode.index).to.equal(grid.items.length - 1);
+      expect(grid.shadowRoot.activeElement.parentNode.index).to.equal(grid.size - 1);
     });
 
     describe('horizontal scrolling', () => {
       beforeEach(() => {
-        grid.style.width = '100px'; // column default min width is 100px
+        grid.style.width = '100px'; // Column default min width is 100px
       });
 
       it('should scroll cells visible with right arrow on header', () => {
@@ -1069,6 +1038,7 @@ describe('keyboard navigation', () => {
         down();
         right();
 
+        flushGrid(grid);
         left();
 
         expect(grid.$.table.scrollLeft).to.equal(0);
@@ -1079,6 +1049,7 @@ describe('keyboard navigation', () => {
         down();
         right();
 
+        flushGrid(grid);
         left();
 
         expect(grid.$.table.scrollLeft).to.equal(0);
@@ -1088,24 +1059,36 @@ describe('keyboard navigation', () => {
         focusItem(0);
         grid.$.table.scrollLeft = 999999999;
 
+        flushGrid(grid);
         home();
 
         expect(grid.$.table.scrollLeft).to.equal(0);
       });
 
-      it('should scroll cells visible with end', () => {
+      it('should scroll cells visible with end', async () => {
+        await nextFrame();
+
         focusItem(0);
+        await nextFrame();
 
         end();
+        await nextFrame();
 
         flushGrid(grid);
+
+        // Force reflow to workaround a Safari rendering issue
+        if (isDesktopSafari) {
+          grid.style.display = 'flex';
+          await nextFrame();
+          grid.style.display = '';
+        }
 
         expect(grid.$.table.scrollLeft).to.equal(grid.$.table.scrollWidth - grid.$.table.offsetWidth);
       });
 
       it('should scroll cell visible under from frozen cells with left arrow', async () => {
         const scrollbarWidth = grid.$.table.offsetWidth - grid.$.table.clientWidth;
-        grid.style.width = `${200 + scrollbarWidth}px`; // column default min width is 100px
+        grid.style.width = `${200 + scrollbarWidth}px`; // Column default min width is 100px
         grid.style.border = 'none';
         grid._columnTree[0][0].frozen = true;
 
@@ -1117,11 +1100,26 @@ describe('keyboard navigation', () => {
         expect(grid.$.table.scrollLeft).to.equal(0);
       });
 
+      it('should scroll cell visible under from frozen to end cells with right arrow', async () => {
+        const scrollbarWidth = grid.$.table.offsetWidth - grid.$.table.clientWidth;
+        grid.style.width = `${200 + scrollbarWidth}px`; // Column default min width is 100px
+        grid.style.border = 'none';
+        grid._columnTree[0][2].frozenToEnd = true;
+        await aTimeout(0);
+
+        getRowCell(0, 2).focus();
+        left();
+        left();
+        await aTimeout(0);
+        right();
+        expect(grid.$.table.scrollLeft).to.equal(grid.$.table.scrollWidth - grid.$.table.offsetWidth);
+      });
+
       it('should scroll cells visible with left arrow on footer', async () => {
         focusFirstFooterCell();
         down();
         right();
-        await aTimeout(0);
+        await nextFrame();
         left();
         expect(grid.$.table.scrollLeft).to.equal(0);
       });
@@ -1132,14 +1130,23 @@ describe('keyboard navigation', () => {
         grid.items = undefined;
         grid.size = 200;
         grid.dataProvider = infiniteDataProvider;
-        grid._scrollToIndex(0);
+        grid.scrollToIndex(0);
         flushGrid(grid);
         await nextFrame();
       });
 
       it('should scroll rows visible with up arrow', () => {
         focusItem(0);
-        grid._scrollToIndex(100);
+        grid.scrollToIndex(100);
+
+        up();
+
+        expect(grid.$.table.scrollTop).to.equal(0);
+      });
+
+      it('should scroll half visible rows fully visible with up arrow', () => {
+        focusItem(0);
+        grid.$.table.scrollTop = 20;
 
         up();
 
@@ -1147,9 +1154,10 @@ describe('keyboard navigation', () => {
       });
 
       it('should scroll rows visible with down arrow', () => {
-        focusItem(grid._lastVisibleIndex);
+        focusItem(getLastVisibleItem(grid).index);
 
         down();
+        flushGrid(grid);
 
         expect(grid.$.table.scrollTop).to.be.above(0);
       });
@@ -1173,11 +1181,11 @@ describe('keyboard navigation', () => {
 
       it('should scroll down one page with page down', () => {
         focusItem(0);
-        const previousLastVisibleIndex = grid._lastVisibleIndex;
+        const previousLastVisibleIndex = getLastVisibleItem(grid).index;
 
         pageDown();
 
-        expect(grid._lastVisibleIndex).to.be.gt(1); // sanity check
+        expect(getLastVisibleItem(grid).index).to.be.gt(1); // Sanity check
         expect(getFocusedRowIndex()).to.equal(previousLastVisibleIndex - 1);
       });
 
@@ -1199,6 +1207,8 @@ describe('keyboard navigation', () => {
         tab();
         tabToBody();
 
+        flushGrid(grid);
+
         expect(grid.$.table.scrollTop).to.equal(0);
       });
 
@@ -1206,14 +1216,14 @@ describe('keyboard navigation', () => {
         scrollToEnd(grid);
         getCell(grid, 0).focus();
         up();
+        flushGrid(grid);
 
-        let focusedRow = grid.$.items.children[getFocusedRowIndex()];
-        const focusedContent = getCellContent(getRowCells(focusedRow)[0]).textContent;
+        const focusedRowIndexBefore = getFocusedRowIndex();
 
         grid.size *= 2;
 
-        focusedRow = grid.$.items.children[getFocusedRowIndex()];
-        expect(getCellContent(getRowCells(focusedRow)[0]).textContent).to.equal(focusedContent);
+        const focusedRowIndexAfter = getFocusedRowIndex();
+        expect(focusedRowIndexBefore).to.equal(focusedRowIndexAfter);
       });
 
       it('should not focus a cell on size change if the focus is outside the body', () => {
@@ -1239,7 +1249,7 @@ describe('keyboard navigation', () => {
 
           expect(grid.hasAttribute('navigating')).to.be.true;
 
-          grid._scrollToIndex(100);
+          grid.scrollToIndex(100);
 
           expect(grid.hasAttribute('navigating')).to.be.false;
         });
@@ -1247,20 +1257,20 @@ describe('keyboard navigation', () => {
         it('should reveal navigation mode when a focused row is back on screen', () => {
           focusItem(0);
           right();
-          grid._scrollToIndex(100);
+          grid.scrollToIndex(100);
 
-          grid._scrollToIndex(0);
+          grid.scrollToIndex(0);
 
           expect(grid.hasAttribute('navigating')).to.be.true;
         });
 
         it('should not hide navigation mode if a header cell is focused', () => {
-          focusFirstHeaderCell();
+          tabToHeader();
           right();
 
           expect(grid.hasAttribute('navigating')).to.be.true;
 
-          grid._scrollToIndex(100);
+          grid.scrollToIndex(100);
 
           expect(grid.hasAttribute('navigating')).to.be.true;
         });
@@ -1289,7 +1299,7 @@ describe('keyboard navigation', () => {
 
     it('should deactivate item on space keydown', () => {
       focusItem(0);
-      clickItem(0); // activates first item on click
+      clickItem(0); // Activates first item on click
 
       spaceDown();
 
@@ -1427,6 +1437,19 @@ describe('keyboard navigation', () => {
         expect(spy.called).to.be.true;
         expect(grid.activeItem).to.be.null;
       });
+
+      it('should allow toggling a checkbox with space keypress', async () => {
+        // Add a selection column
+        grid.appendChild(document.createElement('vaadin-grid-selection-column'));
+        flushGrid(grid);
+
+        // Get a reference to a checkbox, focus it and hit space
+        const vaadinCheckbox = getCellContent(getRowCell(0, 3)).children[0];
+        vaadinCheckbox.focus();
+        await sendKeys({ press: 'Space' });
+
+        expect(vaadinCheckbox.checked).to.be.true;
+      });
     });
   });
 
@@ -1468,7 +1491,54 @@ describe('keyboard navigation', () => {
   });
 
   describe('interaction mode', () => {
-    beforeEach(() => {
+    beforeEach(async () => {
+      grid = fixtureSync(`
+      <vaadin-grid theme="no-border">
+        <template class="row-details">
+          <input type="text">
+        </template>
+        <vaadin-grid-column>
+          <template class="header"></template>
+          <template>[[index]] [[item]]</template>
+          <template class="footer"></template>
+        </vaadin-grid-column>
+        <vaadin-grid-column>
+          <template class="header">
+            <input>
+          </template>
+          <template>
+            <input>
+          </template>
+          <template class="footer">
+            <input>
+          </template>
+        </vaadin-grid-column>
+        <vaadin-grid-column>
+          <template class="header">
+            <input>
+          </template>
+          <template>
+            <input>
+          </template>
+          <template class="footer">
+            <input>
+          </template>
+        </vaadin-grid-column>
+      </vaadin-grid>
+    `);
+
+      scroller = grid.$.scroller;
+      header = grid.$.header;
+      body = grid.$.items;
+      footer = grid.$.footer;
+
+      grid._observer.flush();
+      flushGrid(grid);
+
+      await aTimeout(0);
+
+      grid.items = ['foo', 'bar'];
+
       focusItem(0);
       clickItem(0);
     });
@@ -1482,7 +1552,7 @@ describe('keyboard navigation', () => {
     });
 
     it('should exit interaction mode when blurred', () => {
-      grid.setAttribute('interacting', '');
+      grid._setInteracting(true);
 
       focusable.focus();
 
@@ -1490,7 +1560,7 @@ describe('keyboard navigation', () => {
     });
 
     it('should exit interaction mode when tabbed into', () => {
-      grid.setAttribute('interacting', '');
+      grid._setInteracting(true);
 
       tabToHeader();
 
@@ -1498,7 +1568,7 @@ describe('keyboard navigation', () => {
     });
 
     it('should exit interaction mode when shift-tabbed into', () => {
-      grid.setAttribute('interacting', '');
+      grid._setInteracting(true);
 
       shiftTabToFooter();
 
@@ -1510,7 +1580,7 @@ describe('keyboard navigation', () => {
       const input = getCellContent(cell).children[0];
       const spy = sinon.spy(input, 'focus');
 
-      right(); // focus the cell with input.
+      right(); // Focus the cell with input.
 
       enter();
 
@@ -1523,7 +1593,7 @@ describe('keyboard navigation', () => {
       const input = getCellContent(cell).children[0];
       input.type = 'text';
 
-      right(); // focus the cell with input.
+      right(); // Focus the cell with input.
       enter();
 
       enter(input);
@@ -1536,7 +1606,7 @@ describe('keyboard navigation', () => {
       const input = getCellContent(cell).children[0];
       input.type = 'button';
 
-      right(); // focus the cell with input.
+      right(); // Focus the cell with input.
       enter();
 
       enter(input);
@@ -1549,21 +1619,51 @@ describe('keyboard navigation', () => {
       const input = getCellContent(cell).children[0];
       const spy = sinon.spy(input, 'focus');
 
-      right(); // focus the cell with input.
+      right(); // Focus the cell with input.
 
       f2();
       expect(spy.callCount).to.equal(1);
       spy.restore();
     });
 
-    it('should focus the next input element when tabbing in interaction mode', () => {
-      right(); // focus the cell with input.
+    it('should focus the next input element when tabbing in interaction mode', async () => {
+      // Focus first input
+      right();
       enter();
 
-      tab(getCellContent(getRowCell(0, 1)).children[0]); // tab in the input
+      const nextInput = getCellInput(0, 2);
 
-      // expecting focusable item cell to remain in place, instead actual focus moves.
-      expect(grid._itemsFocusable).to.equal(getRowCell(0, 1));
+      await sendKeys({ press: 'Tab' });
+
+      expect(document.activeElement).to.equal(nextInput);
+    });
+
+    it('should skip the grid focus target when tabbing in interaction mode', async () => {
+      // Focus last input
+      right();
+      right();
+      enter();
+
+      const previousInput = getCellInput(0, 1);
+
+      // Shift+Tab to previous input
+      await sendKeys({ down: 'Shift' });
+      await sendKeys({ press: 'Tab' });
+      await sendKeys({ up: 'Shift' });
+
+      expect(document.activeElement).to.equal(previousInput);
+    });
+
+    it('should move cell focus target when focusing the next input element in interaction mode', async () => {
+      // Focus first input
+      right();
+      enter();
+
+      const nextCell = getRowCell(0, 2);
+
+      await sendKeys({ press: 'Tab' });
+
+      expect(grid._itemsFocusable).to.equal(nextCell);
     });
 
     it('should focus the element with `focus-target` when entering interaction mode', () => {
@@ -1574,7 +1674,7 @@ describe('keyboard navigation', () => {
       input.parentElement.insertBefore(div, input);
       input.setAttribute('focus-target', '');
 
-      right(); // focus the cell with input.
+      right(); // Focus the cell with input.
 
       enter();
 
@@ -1728,7 +1828,7 @@ describe('keyboard navigation', () => {
     });
 
     it('should exit interaction mode with escape', () => {
-      grid.setAttribute('interacting', '');
+      grid._setInteracting(true);
 
       escape();
 
@@ -1738,10 +1838,10 @@ describe('keyboard navigation', () => {
     it('should remove focus from cell with escape', () => {
       const input = focusFirstBodyInput(0);
 
-      escape(input); // revert to navigation first
+      escape(input); // Revert to navigation first
 
-      escape(); // unfortunately this does not trigger native blur
-      focusable.focus(); // simulate native blur on escape
+      escape(); // Unfortunately this does not trigger native blur
+      focusable.focus(); // Simulate native blur on escape
 
       expect(grid.hasAttribute('navigating')).to.be.false;
     });
@@ -1768,7 +1868,7 @@ describe('keyboard navigation', () => {
       grid.removeAttribute('interacting');
 
       escape();
-      focusable.focus(); // simulate native blur on escape
+      focusable.focus(); // Simulate native blur on escape
 
       expect(grid.hasAttribute('navigating')).to.be.false;
     });
@@ -1778,54 +1878,100 @@ describe('keyboard navigation', () => {
 
       expect(grid.hasAttribute('interacting')).to.be.true;
     });
+
+    it('should not throw error when hit enter after focus on table body', () => {
+      expect(() => {
+        grid.$.items.focus();
+        enter(grid);
+      }).not.to.throw(Error);
+    });
   });
 
   describe('focus events on cell content', () => {
-    let cell;
+    it('should dispatch cell-focus on keyboard navigation', () => {
+      const expectedContext = {
+        column: grid.querySelector('vaadin-grid-column'),
+        detailsOpened: false,
+        expanded: false,
+        index: 0,
+        item: 'foo',
+        level: 0,
+        section: 'body',
+        selected: false,
+      };
 
-    beforeEach(() => (cell = getRowCell(0, 0)));
-
-    it('should dispatch cell-focusin after cell focus', () => {
-      const spy = sinon.spy();
-      cell._content.addEventListener('cell-focusin', spy);
-
-      tabToBody();
-
-      expect(spy.callCount).to.equal(1);
-    });
-
-    it('should dispatch cell-focusout after cell blur', () => {
-      tabToBody();
-
-      const spy = sinon.spy();
-      cell._content.addEventListener('cell-focusout', spy);
-
-      right();
-
-      expect(spy.callCount).to.equal(1);
-    });
-
-    it('should dispatch cell-focusin on keyboard navigation', () => {
       tabToBody();
       right();
 
       const spy = sinon.spy();
-      cell._content.addEventListener('cell-focusin', spy);
+
+      grid.addEventListener('cell-focus', spy);
 
       left();
 
-      expect(spy.callCount).to.equal(1);
+      expect(spy.calledOnce).to.be.true;
+
+      const e = spy.firstCall.args[0];
+
+      expect(e.detail.context).to.be.deep.equal(expectedContext);
+
+      grid.removeEventListener('cell-focus', spy);
     });
 
-    it('should dispatch cell-focusout on keyboard navigation', () => {
-      tabToBody();
+    // Separate test suite for Chrome, where we use a workaround to dispatch
+    // cell-focus on mouse up
+    (isChrome ? describe : describe.skip)('chrome', () => {
+      it('should dispatch cell-focus on mouse up on cell content', () => {
+        const spy = sinon.spy();
+        grid.addEventListener('cell-focus', spy);
 
-      const spy = sinon.spy();
-      cell._content.addEventListener('cell-focusout', spy);
+        // Mouse down and release on cell content element
+        const cell = getRowFirstCell(0);
+        mouseDown(cell._content);
+        mouseUp(cell._content);
+        expect(spy.calledOnce).to.be.true;
+      });
 
-      right();
+      it('should dispatch cell-focus on mouse up on cell content when grid is in shadow DOM', () => {
+        const spy = sinon.spy();
+        grid.addEventListener('cell-focus', spy);
 
-      expect(spy.callCount).to.equal(1);
+        // Move grid into a shadow DOM
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+        container.attachShadow({ mode: 'open' });
+        container.shadowRoot.appendChild(grid);
+
+        // Mouse down and release on cell content element
+        const cell = getRowFirstCell(0);
+        mouseDown(cell._content);
+        mouseUp(cell._content);
+        expect(spy.calledOnce).to.be.true;
+      });
+
+      it('should dispatch cell-focus on mouse up within cell content', () => {
+        const spy = sinon.spy();
+        grid.addEventListener('cell-focus', spy);
+
+        // Mouse down and release on cell content child
+        const cell = getRowFirstCell(0);
+        const contentSpan = document.createElement('span');
+        cell._content.appendChild(contentSpan);
+
+        mouseDown(contentSpan);
+        mouseUp(contentSpan);
+        expect(spy.calledOnce).to.be.true;
+      });
+
+      // Regression test for https://github.com/vaadin/flow-components/issues/2863
+      it('should not dispatch cell-focus on mouse up outside of cell', () => {
+        const spy = sinon.spy();
+        grid.addEventListener('cell-focus', spy);
+
+        mouseDown(getRowFirstCell(0)._content);
+        mouseUp(document.body);
+        expect(spy.calledOnce).to.be.false;
+      });
     });
   });
 });
@@ -1905,5 +2051,226 @@ describe('keyboard navigation on column groups', () => {
     up();
 
     expect(getFocusedRowIndex()).to.equal(0);
+  });
+
+  describe('updating tabbable cells', () => {
+    describe('header', () => {
+      let header;
+      let mainGroup;
+      let subGroup;
+      let column;
+
+      beforeEach(() => {
+        header = grid.$.header;
+        mainGroup = grid.querySelector('vaadin-grid-column-group');
+        subGroup = mainGroup.querySelector('vaadin-grid-column-group');
+        column = subGroup.querySelector('vaadin-grid-column');
+      });
+
+      it('should update tabbable header cell on header row hide', async () => {
+        const initialTabbableHeaderCell = getTabbableCells(header)[0];
+
+        // Hide the first header row
+        mainGroup.headerRenderer = null;
+        await nextFrame();
+
+        const tabbableHeaderCell = getTabbableCells(header)[0];
+        expect(tabbableHeaderCell.offsetHeight).not.to.equal(0);
+        expect(tabbableHeaderCell).not.to.equal(initialTabbableHeaderCell);
+      });
+
+      it('should have no tabbable header cells when header is hidden', async () => {
+        // Hide all header rows
+        mainGroup.headerRenderer = null;
+        subGroup.headerRenderer = null;
+        column.headerRenderer = null;
+        await nextFrame();
+
+        const tabbableHeaderCell = getTabbableCells(header)[0];
+        expect(tabbableHeaderCell).not.to.be.ok;
+      });
+
+      it('should update tabbable header cell on header row unhide', async () => {
+        // Hide all header rows
+        mainGroup.headerRenderer = null;
+        subGroup.headerRenderer = null;
+        column.headerRenderer = null;
+        await nextFrame();
+
+        column.header = 'column';
+        await nextFrame();
+
+        const tabbableHeaderCell = getTabbableCells(header)[0];
+        expect(tabbableHeaderCell.offsetHeight).not.to.equal(0);
+      });
+    });
+
+    describe('body', () => {
+      let body;
+
+      beforeEach(() => {
+        body = grid.$.items;
+      });
+
+      it('should update tabbable body cell on body row hide', async () => {
+        // Focus the second body row / make it tabbable
+        tabToBody();
+        down();
+
+        // Hide the second body row
+        grid.items = [grid.items[0]];
+
+        await nextFrame();
+
+        // Expect the tabbable body cell to be on the first row
+        const tabbableBodyCell = getTabbableCells(body)[0];
+        expect(tabbableBodyCell.parentElement.index).to.equal(0);
+        expect(tabbableBodyCell.offsetHeight).not.to.equal(0);
+      });
+
+      it('should have no tabbable body cell when there are no rows', () => {
+        // Remove all body rows
+        grid.items = [];
+
+        const tabbableBodyCell = getTabbableCells(body)[0];
+        expect(tabbableBodyCell).not.to.be.ok;
+      });
+
+      it('should update tabbable body cell on body row unhide', async () => {
+        // Remove all body rows
+        grid.items = [];
+        await nextFrame();
+
+        grid.items = ['foo', 'bar'];
+        await nextFrame();
+
+        const tabbableBodyCell = getTabbableCells(body)[0];
+        expect(tabbableBodyCell.parentElement.index).to.equal(0);
+        expect(tabbableBodyCell.offsetHeight).not.to.equal(0);
+      });
+
+      it('should remain on the first column after a tabbable cell row is hidden', async () => {
+        // Add a second column
+        const column = document.createElement('vaadin-grid-column');
+        grid.appendChild(column);
+        await nextFrame();
+
+        // Focus the second cell on the second row
+        tabToBody();
+        right();
+        down();
+
+        // Hide the second body row
+        grid.items = [grid.items[0]];
+
+        // Focus the first row (should focus the first cell)
+        tabToBody();
+        // Hit down
+        down();
+
+        // Expect the focus to be on the first column
+        expect(getFocusedCellIndex()).to.equal(0);
+      });
+
+      it('should tab to body after reducing rows', async () => {
+        // Focus a cell on the second row
+        tabToBody();
+        down();
+
+        // Hide the second body row
+        grid.items = [grid.items[0]];
+
+        // Navigate from header to body with tab
+        tabToHeader();
+        await sendKeys({ press: 'Tab' });
+
+        // Expect the focus to be in the body
+        expect(body.contains(grid.shadowRoot.activeElement)).to.be.true;
+      });
+    });
+  });
+});
+
+describe('empty grid', () => {
+  beforeEach(() => {
+    grid = fixtureSync(`
+      <vaadin-grid>
+        <vaadin-grid-column header="header"></vaadin-grid-column>
+      </vaadin-grid>
+    `);
+    flushGrid(grid);
+  });
+
+  it('should be possible to exit an empty grid with tab', () => {
+    flushGrid(grid);
+
+    tabToHeader();
+    tab();
+
+    // Expect programmatic focus on focus exit element
+    expect(grid.shadowRoot.activeElement).to.equal(grid.$.focusexit);
+  });
+
+  it('should not throw on Shift + Tab when grid has tabindex', () => {
+    grid.setAttribute('tabindex', '0');
+
+    grid.focus();
+
+    expect(() => {
+      shiftTab(grid);
+    }).to.not.throw(Error);
+  });
+});
+
+describe('hierarchical data', () => {
+  // Let's use a count that equals the pageSize so we can ignore page + pageSize in the data provider
+  const itemsOnEachLevel = 50;
+
+  function hierarchicalDataProvider({ parentItem }, callback) {
+    const items = [...Array(itemsOnEachLevel).keys()].map((i) => {
+      return {
+        name: `${parentItem ? `${parentItem.name}-` : ''}${i}`,
+        children: true,
+      };
+    });
+
+    callback(items, itemsOnEachLevel);
+  }
+
+  beforeEach(() => {
+    grid = fixtureSync(`
+      <vaadin-grid>
+        <vaadin-grid-tree-column path="name"></vaadin-grid-tree-column>
+      </vaadin-grid>
+    `);
+
+    grid.dataProvider = hierarchicalDataProvider;
+    flushGrid(grid);
+  });
+
+  it('should not change focused cell on expand', async () => {
+    // Focus the first cell/row
+    focusItem(0);
+    // Press ctrl+end to move the focus to the last cell/row
+    ctrlEnd();
+    expect(grid.shadowRoot.activeElement.parentNode.index).to.equal(itemsOnEachLevel - 1);
+    // Press space to expand the row
+    await sendKeys({ press: 'Space' });
+    // Expect the focus to not have changed
+    expect(grid.shadowRoot.activeElement.parentNode.index).to.equal(itemsOnEachLevel - 1);
+  });
+
+  it('should not change focused cell on expand - row focus mode', async () => {
+    // Focus the first cell/row
+    focusItem(0);
+    // Press ctrl+end to move the focus to the last cell/row
+    ctrlEnd();
+    // Enter row focus mode
+    left();
+    expect(grid.shadowRoot.activeElement.index).to.equal(itemsOnEachLevel - 1);
+    // Press ArrowRight to expand the row
+    await sendKeys({ press: 'ArrowRight' });
+    // Expect the focus to not have changed
+    expect(grid.shadowRoot.activeElement.index).to.equal(itemsOnEachLevel - 1);
   });
 });

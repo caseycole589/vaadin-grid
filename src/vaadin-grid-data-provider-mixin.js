@@ -1,10 +1,10 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
-import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
-import { timeOut } from '@polymer/polymer/lib/utils/async.js';
+import { timeOut } from '@vaadin/component-base/src/async.js';
+import { Debouncer } from '@vaadin/component-base/src/debounce.js';
 
 /**
  * @private
@@ -42,7 +42,7 @@ export const ItemCache = class ItemCache {
       Object.keys(this.pendingRequests).length ||
         Object.keys(this.itemCaches).filter((index) => {
           return this.itemCaches[index].isLoading();
-        })[0]
+        })[0],
     );
   }
 
@@ -107,6 +107,16 @@ export const DataProviderMixin = (superClass) =>
     static get properties() {
       return {
         /**
+         * The number of root-level items in the grid.
+         * @attr {number} size
+         * @type {number}
+         */
+        size: {
+          type: Number,
+          notify: true,
+        },
+
+        /**
          * Number of items fetched at a time from the dataprovider.
          * @attr {number} page-size
          * @type {number}
@@ -114,7 +124,7 @@ export const DataProviderMixin = (superClass) =>
         pageSize: {
           type: Number,
           value: 50,
-          observer: '_pageSizeChanged'
+          observer: '_pageSizeChanged',
         },
 
         /**
@@ -143,7 +153,7 @@ export const DataProviderMixin = (superClass) =>
         dataProvider: {
           type: Object,
           notify: true,
-          observer: '_dataProviderChanged'
+          observer: '_dataProviderChanged',
         },
 
         /**
@@ -153,7 +163,7 @@ export const DataProviderMixin = (superClass) =>
           type: Boolean,
           notify: true,
           readOnly: true,
-          reflectToAttribute: true
+          reflectToAttribute: true,
         },
 
         /**
@@ -162,10 +172,27 @@ export const DataProviderMixin = (superClass) =>
          */
         _cache: {
           type: Object,
-          value: function () {
+          value() {
             const cache = new ItemCache(this);
             return cache;
-          }
+          },
+        },
+
+        /**
+         * @protected
+         */
+        _hasData: {
+          type: Boolean,
+          value: false,
+        },
+
+        /**
+         * Path to an item sub-property that indicates whether the item has child items.
+         * @attr {string} item-has-children-path
+         */
+        itemHasChildrenPath: {
+          type: String,
+          value: 'children',
         },
 
         /**
@@ -174,7 +201,7 @@ export const DataProviderMixin = (superClass) =>
          */
         itemIdPath: {
           type: String,
-          value: null
+          value: null,
         },
 
         /**
@@ -184,13 +211,21 @@ export const DataProviderMixin = (superClass) =>
         expandedItems: {
           type: Object,
           notify: true,
-          value: () => []
-        }
+          value: () => [],
+        },
+
+        /**
+         * @private
+         */
+        __expandedKeys: {
+          type: Object,
+          computed: '__computeExpandedKeys(itemIdPath, expandedItems.*)',
+        },
       };
     }
 
     static get observers() {
-      return ['_sizeChanged(size)', '_itemIdPathChanged(itemIdPath)', '_expandedItemsChanged(expandedItems.*)'];
+      return ['_sizeChanged(size)', '_expandedItemsChanged(expandedItems.*)'];
     }
 
     /** @private */
@@ -199,8 +234,6 @@ export const DataProviderMixin = (superClass) =>
       this._cache.size += delta;
       this._cache.effectiveSize += delta;
       this._effectiveSize = this._cache.effectiveSize;
-      this._increasePoolIfNeeded(0);
-      this._debounceIncreasePool && this._debounceIncreasePool.flush();
     }
 
     /**
@@ -217,26 +250,14 @@ export const DataProviderMixin = (superClass) =>
       const { cache, scaledIndex } = this._cache.getCacheAndIndex(index);
       const item = cache.items[scaledIndex];
       if (item) {
-        this._toggleAttribute('loading', false, el);
+        el.toggleAttribute('loading', false);
         this._updateItem(el, item);
         if (this._isExpanded(item)) {
           cache.ensureSubCacheForScaledIndex(scaledIndex);
         }
       } else {
-        this._toggleAttribute('loading', true, el);
+        el.toggleAttribute('loading', true);
         this._loadPage(this._getPageForIndex(scaledIndex), cache);
-      }
-    }
-
-    /** @private */
-    _expandedInstanceChangedCallback(inst, value) {
-      if (inst.item === undefined) {
-        return;
-      }
-      if (value) {
-        this.expandItem(inst.item);
-      } else {
-        this.collapseItem(inst.item);
       }
     }
 
@@ -261,25 +282,20 @@ export const DataProviderMixin = (superClass) =>
 
     /** @private */
     _expandedItemsChanged() {
-      this.__cacheExpandedKeys();
       this._cache.updateSize();
       this._effectiveSize = this._cache.effectiveSize;
-      this._assignModels();
+      this.__updateVisibleRows();
     }
 
     /** @private */
-    _itemIdPathChanged() {
-      this.__cacheExpandedKeys();
-    }
+    __computeExpandedKeys(itemIdPath, expandedItems) {
+      const expanded = expandedItems.base || [];
+      const expandedKeys = new Set();
+      expanded.forEach((item) => {
+        expandedKeys.add(this.getItemId(item));
+      });
 
-    /** @private */
-    __cacheExpandedKeys() {
-      if (this.expandedItems) {
-        this.__expandedKeys = new Set();
-        this.expandedItems.forEach((item) => {
-          this.__expandedKeys.add(this.getItemId(item));
-        });
-      }
+      return expandedKeys;
     }
 
     /**
@@ -288,7 +304,7 @@ export const DataProviderMixin = (superClass) =>
      */
     expandItem(item) {
       if (!this._isExpanded(item)) {
-        this.push('expandedItems', item);
+        this.expandedItems = [...this.expandedItems, item];
       }
     }
 
@@ -298,7 +314,7 @@ export const DataProviderMixin = (superClass) =>
      */
     collapseItem(item) {
       if (this._isExpanded(item)) {
-        this.splice('expandedItems', this._getItemIndexInArray(item, this.expandedItems), 1);
+        this.expandedItems = this.expandedItems.filter((i) => !this._itemsEqual(i, item));
       }
     }
 
@@ -312,17 +328,9 @@ export const DataProviderMixin = (superClass) =>
       let level = 0;
       while (cache.parentCache) {
         cache = cache.parentCache;
-        level++;
+        level += 1;
       }
       return level;
-    }
-
-    /**
-     * @return {boolean}
-     * @protected
-     */
-    _canPopulate() {
-      return Boolean(this._hasData && this._columnTree);
     }
 
     /**
@@ -331,7 +339,7 @@ export const DataProviderMixin = (superClass) =>
      * @protected
      */
     _loadPage(page, cache) {
-      // make sure same page isn't requested multiple times.
+      // Make sure same page isn't requested multiple times.
       if (!cache.pendingRequests[page] && this.dataProvider) {
         this._setLoading(true);
         cache.pendingRequests[page] = true;
@@ -340,16 +348,14 @@ export const DataProviderMixin = (superClass) =>
           pageSize: this.pageSize,
           sortOrders: this._mapSorters(),
           filters: this._mapFilters(),
-          parentItem: cache.parentItem
+          parentItem: cache.parentItem,
         };
-        this._debounceIncreasePool && this._debounceIncreasePool.flush();
+
         this.dataProvider(params, (items, size) => {
           if (size !== undefined) {
             cache.size = size;
-          } else {
-            if (params.parentItem) {
-              cache.size = items.length;
-            }
+          } else if (params.parentItem) {
+            cache.size = items.length;
           }
 
           const currentItems = Array.from(this.$.items.children).map((row) => row._item);
@@ -382,7 +388,6 @@ export const DataProviderMixin = (superClass) =>
                 }
               });
 
-            this._increasePoolIfNeeded(0);
             this.__scrollToPendingIndex();
           });
 
@@ -409,18 +414,12 @@ export const DataProviderMixin = (superClass) =>
      */
     clearCache() {
       this._cache = new ItemCache(this);
-      Array.from(this.$.items.children).forEach((row) => {
-        Array.from(row.children).forEach((cell) => {
-          // Force data system to pick up subproperty changes
-          cell._instance && cell._instance._setPendingProperty('item', {}, false);
-        });
-      });
       this._cache.size = this.size || 0;
       this._cache.updateSize();
       this._hasData = false;
-      this._assignModels();
+      this.__updateVisibleRows();
 
-      if (!this._effectiveSize || !this._initialPoolCreated) {
+      if (!this._effectiveSize) {
         this._loadPage(0, this._cache);
       }
     }
@@ -439,7 +438,7 @@ export const DataProviderMixin = (superClass) =>
           'The <vaadin-grid> needs the total number of items' +
             ' in order to display rows. Set the total number of items' +
             ' to the `size` property, or provide the total number of items' +
-            ' in the second argument of the `dataProvider`’s `callback` call.'
+            ' in the second argument of the `dataProvider`’s `callback` call.',
         );
       }
     }
@@ -450,26 +449,19 @@ export const DataProviderMixin = (superClass) =>
         this.clearCache();
       }
 
-      if (dataProvider && this.items && this.items.length) {
-        // Fixes possibly invalid cached lastVisibleIndex value in <iron-list>
-        this._scrollToIndex(this._firstVisibleIndex);
-      }
-
       this._ensureFirstPageLoaded();
 
       this._debouncerCheckSize = Debouncer.debounce(
         this._debouncerCheckSize,
         timeOut.after(2000),
-        this._checkSize.bind(this)
+        this._checkSize.bind(this),
       );
-
-      this._scrollHandler();
     }
 
     /** @protected */
     _ensureFirstPageLoaded() {
       if (!this._hasData) {
-        // load data before adding rows to make sure they have content when
+        // Load data before adding rows to make sure they have content when
         // rendered for the first time.
         this._loadPage(0, this._cache);
       }
@@ -512,11 +504,6 @@ export const DataProviderMixin = (superClass) =>
       if (this.__pendingScrollToIndex && this.$.items.children.length) {
         const index = this.__pendingScrollToIndex;
         delete this.__pendingScrollToIndex;
-
-        if (this._debounceIncreasePool) {
-          this._debounceIncreasePool.flush();
-        }
-
         this.scrollToIndex(index);
       }
     }

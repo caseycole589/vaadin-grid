@@ -1,126 +1,153 @@
-import { ElementMixin } from '@vaadin/vaadin-element-mixin/vaadin-element-mixin.js';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { DisabledMixinClass } from '@vaadin/component-base/src/disabled-mixin.js';
+import type { ElementMixinClass } from '@vaadin/component-base/src/element-mixin.js';
+import type { ThemableMixinClass } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
+import type { ThemePropertyMixinClass } from '@vaadin/vaadin-themable-mixin/vaadin-theme-property-mixin.js';
+import type { ActiveItemMixinClass } from './vaadin-grid-active-item-mixin.js';
+import type { ArrayDataProviderMixinClass } from './vaadin-grid-array-data-provider-mixin.js';
+import type { GridColumn } from './vaadin-grid-column.js';
+import { GridBodyRenderer, GridHeaderFooterRenderer } from './vaadin-grid-column.js';
+import type { ColumnReorderingMixinClass } from './vaadin-grid-column-reordering-mixin.js';
+import type { DataProviderMixinClass } from './vaadin-grid-data-provider-mixin.js';
+import {
+  GridDataProvider,
+  GridDataProviderCallback,
+  GridDataProviderParams,
+  GridFilterDefinition,
+  GridSorterDefinition,
+  GridSorterDirection,
+} from './vaadin-grid-data-provider-mixin.js';
+import type { DragAndDropMixinClass } from './vaadin-grid-drag-and-drop-mixin.js';
+import { GridDragAndDropFilter, GridDropLocation, GridDropMode } from './vaadin-grid-drag-and-drop-mixin.js';
+import type { EventContextMixinClass } from './vaadin-grid-event-context-mixin.js';
+import { GridEventContext } from './vaadin-grid-event-context-mixin.js';
+import type { RowDetailsMixinClass } from './vaadin-grid-row-details-mixin.js';
+import { GridRowDetailsRenderer } from './vaadin-grid-row-details-mixin.js';
+import type { ScrollMixinClass } from './vaadin-grid-scroll-mixin.js';
+import type { SelectionMixinClass } from './vaadin-grid-selection-mixin.js';
+import type { SortMixinClass } from './vaadin-grid-sort-mixin.js';
+import type { StylingMixinClass } from './vaadin-grid-styling-mixin.js';
+import { GridCellClassNameGenerator } from './vaadin-grid-styling-mixin.js';
 
-import { ThemableMixin } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
+export {
+  GridBodyRenderer,
+  GridCellClassNameGenerator,
+  GridDataProvider,
+  GridDataProviderCallback,
+  GridDataProviderParams,
+  GridDragAndDropFilter,
+  GridDropLocation,
+  GridDropMode,
+  GridEventContext,
+  GridFilterDefinition,
+  GridHeaderFooterRenderer,
+  GridRowDetailsRenderer,
+  GridSorterDefinition,
+  GridSorterDirection,
+};
 
-import { GridDropLocation, GridItem, GridItemModel } from './interfaces';
+export type GridDefaultItem = any;
 
-import { ScrollerElement } from './vaadin-grid-scroller.js';
-
-import { A11yMixin } from './vaadin-grid-a11y-mixin.js';
-
-import { ActiveItemMixin } from './vaadin-grid-active-item-mixin.js';
-
-import { ArrayDataProviderMixin } from './vaadin-grid-array-data-provider-mixin.js';
-
-import { ColumnResizingMixin } from './vaadin-grid-column-resizing-mixin.js';
-
-import { DataProviderMixin } from './vaadin-grid-data-provider-mixin.js';
-
-import { DynamicColumnsMixin } from './vaadin-grid-dynamic-columns-mixin.js';
-
-import { EventContextMixin } from './vaadin-grid-event-context-mixin.js';
-
-import { FilterMixin } from './vaadin-grid-filter-mixin.js';
-
-import { RowDetailsMixin } from './vaadin-grid-row-details-mixin.js';
-
-import { ScrollMixin } from './vaadin-grid-scroll-mixin.js';
-
-import { SelectionMixin } from './vaadin-grid-selection-mixin.js';
-
-import { SortMixin } from './vaadin-grid-sort-mixin.js';
-
-import { StylingMixin } from './vaadin-grid-styling-mixin.js';
-
-import { DragAndDropMixin } from './vaadin-grid-drag-and-drop-mixin.js';
-
-import { KeyboardNavigationMixin } from './vaadin-grid-keyboard-navigation-mixin.js';
-
-import { ColumnReorderingMixin } from './vaadin-grid-column-reordering-mixin.js';
-
-import { GridColumnElement } from './vaadin-grid-column.js';
+export interface GridItemModel<TItem> {
+  index: number;
+  item: TItem;
+  selected?: boolean;
+  expanded?: boolean;
+  level?: number;
+  detailsOpened?: boolean;
+}
 
 /**
  * Fired when the `activeItem` property changes.
  */
-export type GridActiveItemChanged = CustomEvent<{ value: GridItem }>;
+export type GridActiveItemChangedEvent<TItem> = CustomEvent<{ value: TItem }>;
 
 /**
  * Fired when the cell is activated with click or keyboard.
  */
-export type GridCellActivate = CustomEvent<{ model: GridItemModel }>;
+export type GridCellActivateEvent<TItem> = CustomEvent<{ model: GridItemModel<TItem> }>;
+
+/**
+ * Fired when a cell is focused with click or keyboard navigation.
+ */
+export type GridCellFocusEvent<TItem> = CustomEvent<{ context: GridEventContext<TItem> }>;
 
 /**
  * Fired when the columns in the grid are reordered.
  */
-export type GridColumnReorder = CustomEvent<{ columns: GridColumnElement[] }>;
+export type GridColumnReorderEvent<TItem> = CustomEvent<{ columns: Array<GridColumn<TItem>> }>;
 
 /**
  * Fired when the grid column resize is finished.
  */
-export type GridColumnResize = CustomEvent<{ resizedColumn: GridColumnElement }>;
+export type GridColumnResizeEvent<TItem> = CustomEvent<{ resizedColumn: GridColumn<TItem> }>;
 
 /**
  * Fired when the `expandedItems` property changes.
  */
-export type GridExpandedItemsChanged = CustomEvent<{ value: GridItem[] }>;
+export type GridExpandedItemsChangedEvent<TItem> = CustomEvent<{ value: TItem[] }>;
 
 /**
  * Fired when starting to drag grid rows.
  */
-export type GridDragStart = CustomEvent<{
-  draggedItems: GridItem[];
-  setDraggedItemsCount: (count: number) => void;
-  setDragData: (type: string, data: string) => void;
+export type GridDragStartEvent<TItem> = CustomEvent<{
+  draggedItems: TItem[];
+  setDraggedItemsCount(count: number): void;
+  setDragData(type: string, data: string): void;
 }>;
 
 /**
  * Fired when a drop occurs on top of the grid.
  */
-export type GridDrop = CustomEvent<{
-  dropTargetItem: GridItem;
+export type GridDropEvent<TItem> = CustomEvent<{
+  dropTargetItem: TItem;
   dropLocation: GridDropLocation;
-  dragData: Array<{ type: string, data: string }>
+  dragData: Array<{ type: string; data: string }>;
 }>;
 
 /**
  * Fired when the `loading` property changes.
  */
-export type GridLoadingChanged = CustomEvent<{ value: boolean }>;
+export type GridLoadingChangedEvent = CustomEvent<{ value: boolean }>;
 
 /**
  * Fired when the `selectedItems` property changes.
  */
-export type GridSelectedItemsChanged = CustomEvent<{ value: GridItem[] }>;
+export type GridSelectedItemsChangedEvent<TItem> = CustomEvent<{ value: TItem[] }>;
 
-export interface GridElementEventMap {
-  'active-item-changed': GridActiveItemChanged;
+export interface GridCustomEventMap<TItem> {
+  'active-item-changed': GridActiveItemChangedEvent<TItem>;
 
-  'cell-activate': GridCellActivate;
+  'cell-activate': GridCellActivateEvent<TItem>;
 
-  'column-reorder': GridColumnReorder;
+  'cell-focus': GridCellFocusEvent<TItem>;
 
-  'column-resize': GridColumnResize;
+  'column-reorder': GridColumnReorderEvent<TItem>;
 
-  'expanded-items-changed': GridExpandedItemsChanged;
+  'column-resize': GridColumnResizeEvent<TItem>;
 
-  'grid-dragstart': GridDragStart;
+  'expanded-items-changed': GridExpandedItemsChangedEvent<TItem>;
+
+  'grid-dragstart': GridDragStartEvent<TItem>;
 
   'grid-dragend': Event;
 
-  'grid-drop': GridDrop;
+  'grid-drop': GridDropEvent<TItem>;
 
-  'loading-changed': GridLoadingChanged;
+  'loading-changed': GridLoadingChangedEvent;
 
-  'selected-items-changed': GridSelectedItemsChanged;
+  'selected-items-changed': GridSelectedItemsChangedEvent<TItem>;
 }
 
-export interface GridEventMap extends HTMLElementEventMap, GridElementEventMap {}
+export interface GridEventMap<TItem> extends HTMLElementEventMap, GridCustomEventMap<TItem> {}
 
 /**
  * `<vaadin-grid>` is a free, high quality data grid / data table Web Component. The content of the
- * the grid can be populated in two ways: imperatively by using renderer callback function and
- * declaratively by using Polymer's Templates.
+ * the grid can be populated by using renderer callback function.
  *
  * ### Quick Start
  *
@@ -188,26 +215,16 @@ export interface GridEventMap extends HTMLElementEventMap, GridElementEventMap {
  * };
  * ```
  *
- * Alternatively, the content can be provided with Polymer's Templates:
+ * The following properties are available in the `model` argument:
  *
- * #### Example:
- * ```html
- * <vaadin-grid items='[{"name": "John", "surname": "Lennon", "role": "singer"},
- * {"name": "Ringo", "surname": "Starr", "role": "drums"}]'>
- *   <vaadin-grid-column>
- *     <template class="header">Name</template>
- *     <template>[[item.name]]</template>
- *   </vaadin-grid-column>
- *   <vaadin-grid-column>
- *     <template class="header">Surname</template>
- *     <template>[[item.surname]]</template>
- *   </vaadin-grid-column>
- *   <vaadin-grid-column>
- *     <template class="header">Role</template>
- *     <template>[[item.role]]</template>
- *   </vaadin-grid-column>
- * </vaadin-grid>
- * ```
+ * Property name | Type | Description
+ * --------------|------|------------
+ * `index`| Number | The index of the item.
+ * `item` | String or Object | The item.
+ * `level` | Number | Number of the item's tree sublevel, starts from 0.
+ * `expanded` | Boolean | True if the item's tree sublevel is expanded.
+ * `selected` | Boolean | True if the item is selected.
+ * `detailsOpened` | Boolean | True if the item's row details are open.
  *
  * The following helper elements can be used for further customization:
  * - [`<vaadin-grid-column-group>`](#/elements/vaadin-grid-column-group)
@@ -218,19 +235,6 @@ export interface GridEventMap extends HTMLElementEventMap, GridElementEventMap {
  *
  * __Note that the helper elements must be explicitly imported.__
  * If you want to import everything at once you can use the `all-imports.html` bundle.
- *
- * A column template can be decorated with one the following class names to specify its purpose
- * - `header`: Marks a header template
- * - `footer`: Marks a footer template
- * - `row-details`: Marks a row details template
- *
- * The following built-in template variables can be bound to inside the column templates:
- * - `[[index]]`: Number representing the row index
- * - `[[item]]` and it's sub-properties: Data object (provided by a data provider / items array)
- * - `{{selected}}`: True if the item is selected (can be two-way bound)
- * - `{{detailsOpened}}`: True if the item has row details opened (can be two-way bound)
- * - `{{expanded}}`: True if the item has tree sublevel expanded (can be two-way bound)
- * - `[[level]]`: Number of the tree sublevel of the item, first level-items have 0
  *
  * ### Lazy Loading with Function Data Provider
  *
@@ -251,20 +255,16 @@ export interface GridEventMap extends HTMLElementEventMap, GridElementEventMap {
  * in the second argument of the data provider callback:__
  *
  * ```javascript
- * grid.dataProvider = function(params, callback) {
- *   const url = 'https://api.example/data' +
- *       '?page=' + params.page +        // the requested page index
- *       '&per_page=' + params.pageSize; // number of items on the page
- *   const xhr = new XMLHttpRequest();
- *   xhr.onload = function() {
- *     const response = JSON.parse(xhr.responseText);
- *     callback(
- *       response.employees, // requested page of items
- *       response.totalSize  // total number of items
- *     );
- *   };
- *   xhr.open('GET', url, true);
- *   xhr.send();
+ * grid.dataProvider = ({page, pageSize}, callback) => {
+ *   // page: the requested page index
+ *   // pageSize: number of items on one page
+ *   const url = `https://api.example/data?page=${page}&per_page=${pageSize}`;
+ *
+ *   fetch(url)
+ *     .then((res) => res.json())
+ *     .then(({ employees, totalSize }) => {
+ *       callback(employees, totalSize);
+ *     });
  * };
  * ```
  *
@@ -272,17 +272,12 @@ export interface GridEventMap extends HTMLElementEventMap, GridElementEventMap {
  *
  * ```javascript
  * grid.size = 200; // The total number of items
- * grid.dataProvider = function(params, callback) {
- *   const url = 'https://api.example/data' +
- *       '?page=' + params.page +        // the requested page index
- *       '&per_page=' + params.pageSize; // number of items on the page
- *   const xhr = new XMLHttpRequest();
- *   xhr.onload = function() {
- *     const response = JSON.parse(xhr.responseText);
- *     callback(response.employees);
- *   };
- *   xhr.open('GET', url, true);
- *   xhr.send();
+ * grid.dataProvider = ({page, pageSize}, callback) => {
+ *   const url = `https://api.example/data?page=${page}&per_page=${pageSize}`;
+ *
+ *   fetch(url)
+ *     .then((res) => res.json())
+ *     .then((resJson) => callback(resJson.employees));
  * };
  * ```
  *
@@ -308,14 +303,14 @@ export interface GridEventMap extends HTMLElementEventMap, GridElementEventMap {
  * `loading` | Set when the grid is loading data from data provider | :host
  * `interacting` | Keyboard navigation in interaction mode | :host
  * `navigating` | Keyboard navigation in navigation mode | :host
- * `overflow` | Set when rows are overflowing the grid viewport. Possible values: `top`, `bottom`, `left`, `right` | :host
+ * `overflow` | Set when rows are overflowing the grid viewport. Possible values: `top`, `bottom`, `start`, `end` | :host
  * `reordering` | Set when the grid's columns are being reordered | :host
  * `dragover` | Set when the grid (not a specific row) is dragged over | :host
- * `dragging-rows` : Set when grid rows are dragged  | :host
+ * `dragging-rows` | Set when grid rows are dragged  | :host
  * `reorder-status` | Reflects the status of a cell while columns are being reordered | cell
  * `frozen` | Frozen cell | cell
  * `last-frozen` | Last frozen cell | cell
- * * `first-column` | First visible cell on a row | cell
+ * `first-column` | First visible cell on a row | cell
  * `last-column` | Last visible cell on a row | cell
  * `selected` | Selected row | row
  * `expanded` | Expanded row | row
@@ -323,15 +318,17 @@ export interface GridEventMap extends HTMLElementEventMap, GridElementEventMap {
  * `loading` | Row that is waiting for data from data provider | row
  * `odd` | Odd row | row
  * `first` | The first body row | row
+ * `last` | The last body row | row
  * `dragstart` | Set for one frame when drag of a row is starting. The value is a number when multiple rows are dragged | row
  * `dragover` | Set when the row is dragged over | row
  * `drag-disabled` | Set to a row that isn't available for dragging | row
  * `drop-disabled` | Set to a row that can't be dropped on top of | row
  *
- * See [ThemableMixin – how to apply styles for shadow parts](https://github.com/vaadin/vaadin-themable-mixin/wiki)
+ * See [Styling Components](https://vaadin.com/docs/latest/styling/custom-theme/styling-components) documentation.
  *
  * @fires {CustomEvent} active-item-changed - Fired when the `activeItem` property changes.
  * @fires {CustomEvent} cell-activate - Fired when the cell is activated with click or keyboard.
+ * @fires {CustomEvent} cell-focus - Fired when a cell is focused with click or keyboard navigation.
  * @fires {CustomEvent} column-reorder - Fired when the columns in the grid are reordered.
  * @fires {CustomEvent} column-resize - Fired when the grid column resize is finished.
  * @fires {CustomEvent} expanded-items-changed - Fired when the `expandedItems` property changes.
@@ -341,102 +338,79 @@ export interface GridEventMap extends HTMLElementEventMap, GridElementEventMap {
  * @fires {CustomEvent} loading-changed - Fired when the `loading` property changes.
  * @fires {CustomEvent} selected-items-changed - Fired when the `selectedItems` property changes.
  */
-declare class GridElement extends ElementMixin(
-  ThemableMixin(
-    A11yMixin(
-      ActiveItemMixin(
-        ArrayDataProviderMixin(
-          ColumnResizingMixin(
-            DataProviderMixin(
-              DynamicColumnsMixin(
-                FilterMixin(
-                  RowDetailsMixin(
-                    ScrollMixin(
-                      SelectionMixin(
-                        SortMixin(
-                          KeyboardNavigationMixin(
-                            ColumnReorderingMixin(EventContextMixin(StylingMixin(DragAndDropMixin(ScrollerElement))))
-                          )
-                        )
-                      )
-                    )
-                  )
-                )
-              )
-            )
-          )
-        )
-      )
-    )
-  )
-) {
+declare class Grid<TItem = GridDefaultItem> extends HTMLElement {
   /**
    * If true, the grid's height is defined by its rows.
    *
    * Effectively, this disables the grid's virtual scrolling so that all the rows are rendered in the DOM at once.
    * If the grid has a large number of items, using the feature is discouraged to avoid performance issues.
-   * @attr {boolean} height-by-rows
+   * @attr {boolean} all-rows-visible
    */
-  heightByRows: boolean;
-
-  __itemsReceived(): void;
+  allRowsVisible: boolean;
 
   /**
    * Updates the `width` of all columns which have `autoWidth` set to `true`.
    */
   recalculateColumnWidths(): void;
 
-  _updateRow(
-    row: HTMLTableRowElement,
-    columns: GridColumnElement[],
-    section: string | null,
-    isColumnRow: boolean,
-    noNotify: boolean
-  ): void;
-
-  __updateHeaderFooterRowVisibility(row: HTMLTableRowElement | null): void;
-
-  _renderColumnTree(columnTree: GridColumnElement[]): void;
-
-  _updateItem(row: HTMLElement, item: GridItem | null): void;
-
-  _toggleAttribute(name: string, bool: boolean, node: Element): void;
-
-  __getRowModel(row: HTMLTableRowElement): GridItemModel;
-
   /**
-   * Manually invoke existing renderers for all the columns
-   * (header, footer and body cells) and opened row details.
+   * Requests an update for the content of cells.
+   *
+   * While performing the update, the following renderers are invoked:
+   * - `Grid.rowDetailsRenderer`
+   * - `GridColumn.renderer`
+   * - `GridColumn.headerRenderer`
+   * - `GridColumn.footerRenderer`
+   *
+   * It is not guaranteed that the update happens immediately (synchronously) after it is requested.
    */
-  render(): void;
+  requestContentUpdate(): void;
 
   /**
    * Updates the computed metrics and positioning of internal grid parts
    * (row/details cell positioning etc). Needs to be invoked whenever the sizing of grid
    * content changes asynchronously to ensure consistent appearance (e.g. when a
    * contained image whose bounds aren't known beforehand finishes loading).
+   *
+   * @deprecated Since Vaadin 22, `notifyResize()` is deprecated. The component uses a
+   * ResizeObserver internally and doesn't need to be explicitly notified of resizes.
    */
   notifyResize(): void;
 
-  __forceReflow(): void;
-
-  addEventListener<K extends keyof GridEventMap>(
+  addEventListener<K extends keyof GridEventMap<TItem>>(
     type: K,
-    listener: (this: GridElement, ev: GridEventMap[K]) => void,
-    options?: boolean | AddEventListenerOptions
+    listener: (this: Grid<TItem>, ev: GridEventMap<TItem>[K]) => void,
+    options?: AddEventListenerOptions | boolean,
   ): void;
 
-  removeEventListener<K extends keyof GridEventMap>(
+  removeEventListener<K extends keyof GridEventMap<TItem>>(
     type: K,
-    listener: (this: GridElement, ev: GridEventMap[K]) => void,
-    options?: boolean | EventListenerOptions
+    listener: (this: Grid<TItem>, ev: GridEventMap<TItem>[K]) => void,
+    options?: EventListenerOptions | boolean,
   ): void;
 }
+
+interface Grid<TItem = GridDefaultItem>
+  extends DisabledMixinClass,
+    ElementMixinClass,
+    ThemableMixinClass,
+    ThemePropertyMixinClass,
+    ActiveItemMixinClass<TItem>,
+    ArrayDataProviderMixinClass<TItem>,
+    DataProviderMixinClass<TItem>,
+    RowDetailsMixinClass<TItem>,
+    ScrollMixinClass,
+    SelectionMixinClass<TItem>,
+    SortMixinClass,
+    ColumnReorderingMixinClass,
+    EventContextMixinClass<TItem>,
+    StylingMixinClass<TItem>,
+    DragAndDropMixinClass<TItem> {}
 
 declare global {
   interface HTMLElementTagNameMap {
-    'vaadin-grid': GridElement;
+    'vaadin-grid': Grid<GridDefaultItem>;
   }
 }
 
-export { GridElement };
+export { Grid };

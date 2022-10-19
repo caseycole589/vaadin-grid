@@ -1,21 +1,13 @@
-import { flush } from '@polymer/polymer/lib/utils/flush.js';
+import sinon from 'sinon';
 
 export const flushGrid = (grid) => {
   grid._observer.flush();
   if (grid._debounceScrolling) {
     grid._debounceScrolling.flush();
   }
-  if (grid._debouncerForceReflow) {
-    grid._debouncerForceReflow.flush();
-  }
-  flush();
+  grid._afterScroll();
   if (grid._debounceOverflow) {
     grid._debounceOverflow.flush();
-  }
-  while (grid._debounceIncreasePool) {
-    grid._debounceIncreasePool.flush();
-    grid._debounceIncreasePool = null;
-    flush();
   }
   if (grid._debouncerHiddenChanged) {
     grid._debouncerHiddenChanged.flush();
@@ -23,10 +15,8 @@ export const flushGrid = (grid) => {
   if (grid._debouncerApplyCachedData) {
     grid._debouncerApplyCachedData.flush();
   }
-  if (grid._debouncerIgnoreNewWheel) {
-    grid._debouncerIgnoreNewWheel.flush();
-  }
-  grid._scrollHandler();
+
+  grid.__virtualizer.flush();
 };
 
 export const getCell = (grid, index) => {
@@ -39,25 +29,17 @@ export const getFirstCell = (grid) => {
 
 export const infiniteDataProvider = (params, callback) => {
   callback(
-    Array.apply(null, Array(params.pageSize)).map((item, index) => {
+    Array.from({ length: params.pageSize }, (_, index) => {
       return {
-        value: 'foo' + (params.page * params.pageSize + index)
+        value: `foo${params.page * params.pageSize + index}`,
       };
-    })
+    }),
   );
-};
-
-export const listenOnce = (element, eventName, callback) => {
-  const listener = (e) => {
-    element.removeEventListener(eventName, listener);
-    callback(e);
-  };
-  element.addEventListener(eventName, listener);
 };
 
 export const buildItem = (index) => {
   return {
-    index: index
+    index,
   };
 };
 
@@ -79,71 +61,62 @@ export const buildDataSet = (size) => {
 };
 
 export const scrollToEnd = (grid, callback) => {
-  grid._scrollToIndex(grid.size - 1);
-
-  // Ensure rows are in order
-  grid._debounceScrolling.flush();
-
-  grid.$.table.scrollTop = grid.$.table.scrollHeight;
-  grid._scrollHandler();
+  grid.scrollToIndex(grid.size - 1);
   flushGrid(grid);
   if (callback) {
     callback();
   }
 };
 
-// http://stackoverflow.com/a/15203639/1331425
-export const isVisible = (el) => {
-  let top = el.offsetTop;
-  let left = el.offsetLeft;
-  const width = el.offsetWidth;
-  const height = el.offsetHeight;
-
-  while (el.offsetParent) {
-    el = el.offsetParent;
-    top += el.offsetTop;
-    left += el.offsetLeft;
-  }
-
+const isVisible = (item, grid) => {
+  const scrollTarget = grid.shadowRoot.querySelector('table');
+  const scrollTargetRect = scrollTarget.getBoundingClientRect();
+  const itemRect = item.getBoundingClientRect();
+  const offset = parseInt(getComputedStyle(item.firstElementChild).borderTopWidth);
+  const headerHeight = grid.shadowRoot.querySelector('thead').offsetHeight;
+  const footerHeight = grid.shadowRoot.querySelector('tfoot').offsetHeight;
   return (
-    top < window.pageYOffset + window.innerHeight &&
-    left < window.pageXOffset + window.innerWidth &&
-    top + height > window.pageYOffset &&
-    left + width > window.pageXOffset
+    itemRect.bottom > scrollTargetRect.top + headerHeight + offset &&
+    itemRect.top < scrollTargetRect.bottom - footerHeight - offset
   );
+};
+
+export const getPhysicalItems = (grid) => {
+  return Array.from(grid.shadowRoot.querySelector('tbody').children)
+    .filter((item) => !item.hidden)
+    .sort((a, b) => a.index - b.index);
+};
+
+export const getPhysicalAverage = (grid) => {
+  const physicalItems = getPhysicalItems(grid);
+  return physicalItems.map((el) => el.offsetHeight).reduce((sum, value) => sum + value, 0) / physicalItems.length;
+};
+
+export const scrollGrid = (grid, left, top) => {
+  grid.shadowRoot.querySelector('table').scroll(left, top);
 };
 
 export const getVisibleItems = (grid) => {
   flushGrid(grid);
-  const rows = grid.$.items.children;
-  const visibleRows = [];
-  for (let i = 0; i < rows.length; i++) {
-    if (isVisible(rows[i])) {
-      visibleRows.push(rows[i]);
-    }
-  }
-  return visibleRows;
+  return getPhysicalItems(grid).filter((item) => isVisible(item, grid));
 };
 
 export const getFirstVisibleItem = (grid) => {
-  const visibleRows = getVisibleItems(grid);
-  if (visibleRows.length) {
-    return visibleRows[0];
-  }
-  return null;
+  return getVisibleItems(grid)[0] || null;
 };
 
 export const getLastVisibleItem = (grid) => {
-  const visibleRows = getVisibleItems(grid);
-  if (visibleRows.length) {
-    return visibleRows.pop();
-  }
-  return null;
+  return getVisibleItems(grid).pop() || null;
 };
 
 export const isWithinParentConstraints = (el, parent) => {
-  return ['top', 'bottom', 'left', 'right'].every(
-    (constraint) => el.getBoundingClientRect[constraint] === parent.getBoundingClientRect[constraint]
+  const elRect = el.getBoundingClientRect();
+  const parentRect = parent.getBoundingClientRect();
+  return (
+    elRect.top >= parentRect.top &&
+    elRect.right <= parentRect.right &&
+    elRect.bottom <= parentRect.bottom &&
+    elRect.left >= parentRect.left
   );
 };
 
@@ -193,12 +166,12 @@ export const dragStart = (source) => {
     {
       x: Math.round(sourceRect.left + sourceRect.width / 2),
       y: Math.round(sourceRect.top + sourceRect.height / 2),
-      state: 'start'
+      state: 'start',
     },
     {
       node: source,
-      bubbles: true
-    }
+      bubbles: true,
+    },
   );
 };
 
@@ -210,12 +183,12 @@ export const dragOver = (source, target, clientX) => {
     {
       x: Math.round(clientX || targetRect.left + targetRect.width / 2),
       y: Math.round(targetRect.top + targetRect.height / 2),
-      state: 'track'
+      state: 'track',
     },
     {
       node: source,
-      bubbles: true
-    }
+      bubbles: true,
+    },
   );
 };
 
@@ -226,12 +199,12 @@ export const dragAndDropOver = (source, target) => {
     {
       x: 0,
       y: 0,
-      state: 'end'
+      state: 'end',
     },
     {
       node: source,
-      bubbles: true
-    }
+      bubbles: true,
+    },
   );
 };
 
@@ -241,36 +214,20 @@ export const makeSoloTouchEvent = (type, xy, node) => {
       identifier: 0,
       target: node,
       clientX: xy.x,
-      clientY: xy.y
-    }
+      clientY: xy.y,
+    },
   ];
   const touchEventInit = {
-    touches: touches,
+    touches,
     targetTouches: touches,
-    changedTouches: touches
+    changedTouches: touches,
   };
   const event = new CustomEvent(type, { bubbles: true, cancelable: true });
-  for (let property in touchEventInit) {
-    event[property] = touchEventInit[property];
-  }
+  Object.entries(touchEventInit).forEach(([key, value]) => {
+    event[key] = value;
+  });
   node.dispatchEvent(event);
   return event;
-};
-
-export function click(element) {
-  const event = new CustomEvent('click', {
-    bubbles: true,
-    cancelable: true,
-    composed: true
-  });
-  element.dispatchEvent(event);
-  return event;
-}
-
-export const flushColumns = (grid) => {
-  Array.prototype.forEach.call(grid.querySelectorAll('vaadin-grid-column, vaadin-grid-column-group'), (col) =>
-    col._templateObserver.flush()
-  );
 };
 
 export const fire = (type, detail, options) => {
@@ -279,7 +236,7 @@ export const fire = (type, detail, options) => {
   const event = new Event(type, {
     bubbles: options.bubbles === undefined ? true : options.bubbles,
     cancelable: Boolean(options.cancelable),
-    composed: options.composed === undefined ? true : options.composed
+    composed: options.composed === undefined ? true : options.composed,
   });
   event.detail = detail;
   const node = options.node || window;
@@ -287,6 +244,28 @@ export const fire = (type, detail, options) => {
   return event;
 };
 
-export const isIOS =
-  (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) ||
-  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+export const nextResize = (target) => {
+  return new Promise((resolve) => {
+    new ResizeObserver(() => setTimeout(resolve)).observe(target);
+  });
+};
+
+/**
+ * Resolves once the function is invoked on the given object.
+ */
+function onceInvoked(object, functionName) {
+  return new Promise((resolve) => {
+    const stub = sinon.stub(object, functionName).callsFake((...args) => {
+      stub.restore();
+      object[functionName](...args);
+      resolve();
+    });
+  });
+}
+
+/**
+ * Resolves once the ResizeObserver in grid has processed a resize.
+ */
+export async function onceResized(grid) {
+  await onceInvoked(grid, '_onResize');
+}

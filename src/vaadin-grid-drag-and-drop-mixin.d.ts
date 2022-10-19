@@ -1,12 +1,22 @@
-import { GridDragAndDropFilter, GridDropMode, GridItemModel } from './interfaces';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { Constructor } from '@open-wc/dedupe-mixin';
+import type { GridItemModel } from './vaadin-grid.js';
 
-declare function DragAndDropMixin<T extends new (...args: any[]) => {}>(base: T): T & DragAndDropMixinConstructor;
+export type GridDragAndDropFilter<TItem> = (model: GridItemModel<TItem>) => boolean;
 
-interface DragAndDropMixinConstructor {
-  new (...args: any[]): DragAndDropMixin;
-}
+export type GridDropLocation = 'above' | 'below' | 'empty' | 'on-top';
 
-interface DragAndDropMixin {
+export type GridDropMode = 'between' | 'on-grid' | 'on-top-or-between' | 'on-top';
+
+export declare function DragAndDropMixin<TItem, T extends Constructor<HTMLElement>>(
+  base: T,
+): Constructor<DragAndDropMixinClass<TItem>> & T;
+
+export declare class DragAndDropMixinClass<TItem> {
   /**
    * Defines the locations within the Grid row where an element can be dropped.
    *
@@ -38,7 +48,7 @@ interface DragAndDropMixin {
    *   - `model.level` Level of the tree represented with a horizontal offset of the toggle button.
    *   - `model.selected` Selected state.
    */
-  dragFilter: GridDragAndDropFilter | null | undefined;
+  dragFilter: GridDragAndDropFilter<TItem> | null | undefined;
 
   /**
    * A function that filters dropping on specific grid rows. The return value should be false
@@ -53,9 +63,7 @@ interface DragAndDropMixin {
    *   - `model.level` Level of the tree represented with a horizontal offset of the toggle button.
    *   - `model.selected` Selected state.
    */
-  dropFilter: GridDragAndDropFilter | null | undefined;
-
-  _clearDragStyles(): void;
+  dropFilter: GridDragAndDropFilter<TItem> | null | undefined;
 
   /**
    * Runs the `dragFilter` and `dropFilter` hooks for the visible cells.
@@ -64,8 +72,4 @@ interface DragAndDropMixin {
    * the conditions change.
    */
   filterDragAndDrop(): void;
-
-  _filterDragAndDrop(row: HTMLElement, model: GridItemModel): void;
 }
-
-export { DragAndDropMixin, DragAndDropMixinConstructor };

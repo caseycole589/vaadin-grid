@@ -1,18 +1,26 @@
-import { GridItem, GridRowDetailsRenderer } from './interfaces';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { Constructor } from '@open-wc/dedupe-mixin';
+import type { Grid, GridItemModel } from './vaadin-grid.js';
 
-declare function RowDetailsMixin<T extends new (...args: any[]) => {}>(base: T): T & RowDetailsMixinConstructor;
+export type GridRowDetailsRenderer<TItem> = (
+  root: HTMLElement,
+  grid?: Grid<TItem>,
+  model?: GridItemModel<TItem>,
+) => void;
 
-interface RowDetailsMixinConstructor {
-  new (...args: any[]): RowDetailsMixin;
-}
+export declare function RowDetailsMixin<TItem, T extends Constructor<HTMLElement>>(
+  base: T,
+): Constructor<RowDetailsMixinClass<TItem>> & T;
 
-interface RowDetailsMixin {
+export declare class RowDetailsMixinClass<TItem> {
   /**
    * An array containing references to items with open row details.
    */
-  detailsOpenedItems: Array<GridItem | null> | null | undefined;
-
-  _rowDetailsTemplate: HTMLTemplateElement | null;
+  detailsOpenedItems: TItem[];
 
   /**
    * Custom function for rendering the content of the row details.
@@ -24,28 +32,19 @@ interface RowDetailsMixin {
    *   the rendered item, contains:
    *   - `model.index` The index of the item.
    *   - `model.item` The item.
+   *   - `model.level` The number of the item's tree sublevel, starts from 0.
+   *   - `model.expanded` True if the item's tree sublevel is expanded.
+   *   - `model.selected` True if the item is selected.
    */
-  rowDetailsRenderer: GridRowDetailsRenderer | null | undefined;
-
-  _detailsCells: HTMLElement[] | undefined;
-
-  _configureDetailsCell(cell: HTMLElement): void;
-
-  _toggleDetailsCell(row: HTMLElement, item: GridItem): void;
-
-  _updateDetailsCellHeights(): void;
-
-  _isDetailsOpened(item: GridItem): boolean;
+  rowDetailsRenderer: GridRowDetailsRenderer<TItem> | null | undefined;
 
   /**
    * Open the details row of a given item.
    */
-  openItemDetails(item: GridItem): void;
+  openItemDetails(item: TItem): void;
 
   /**
    * Close the details row of a given item.
    */
-  closeItemDetails(item: GridItem): void;
+  closeItemDetails(item: TItem): void;
 }
-
-export { RowDetailsMixin, RowDetailsMixinConstructor };

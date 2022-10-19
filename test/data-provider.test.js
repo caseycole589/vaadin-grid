@@ -1,20 +1,22 @@
 import { expect } from '@esm-bundle/chai';
+import { aTimeout, fixtureSync, nextFrame } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { aTimeout, fixtureSync, nextFrame } from '@open-wc/testing-helpers';
-import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
-import { registerStyles, css } from '@vaadin/vaadin-themable-mixin/register-styles.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
+import '../vaadin-grid.js';
+import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
+import { css, registerStyles } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
 import {
   flushGrid,
   getCellContent,
   getContainerCell,
   getFirstCell,
   getFirstVisibleItem,
+  getLastVisibleItem,
+  getPhysicalAverage,
   getRows,
-  getRowCells,
   infiniteDataProvider,
-  scrollToEnd
+  scrollToEnd,
 } from './helpers.js';
-import '../vaadin-grid.js';
 
 registerStyles(
   'vaadin-grid',
@@ -22,7 +24,7 @@ registerStyles(
     [part~='cell'] {
       height: 20px;
     }
-  `
+  `,
 );
 
 class WrappedGrid extends PolymerElement {
@@ -41,8 +43,12 @@ class WrappedGrid extends PolymerElement {
 
   ready() {
     super.ready();
-    this.$.col.headerRenderer = (root) => (root.textContent = 'Header');
-    this.$.col.renderer = (root, col, model) => (root.textContent = model.item.value);
+    this.$.col.headerRenderer = (root) => {
+      root.textContent = 'Header';
+    };
+    this.$.col.renderer = (root, col, model) => {
+      root.textContent = model.item.value;
+    };
   }
 }
 
@@ -63,7 +69,7 @@ class PageSizeGrid extends PolymerElement {
   static get properties() {
     return {
       dataProvider: Object,
-      size: Number
+      size: Number,
     };
   }
 
@@ -78,7 +84,7 @@ class PageSizeGrid extends PolymerElement {
 customElements.define('page-size-grid', PageSizeGrid);
 
 function simulateScrollToStart(grid) {
-  // make sure not over scroll more than the delta threshold limit of 10k.
+  // Make sure not over scroll more than the delta threshold limit of 10k.
   const table = grid.$.table;
 
   return new Promise((resolve) => {
@@ -97,7 +103,7 @@ function simulateScrollToStart(grid) {
 }
 
 function simulateScrollToEnd(grid) {
-  // make sure not over scroll more than the delta threshold limit of 10k.
+  // Make sure not over scroll more than the delta threshold limit of 10k.
   const table = grid.$.table;
 
   return new Promise((resolve) => {
@@ -215,7 +221,7 @@ describe('data provider', () => {
             }
             return item;
           }),
-          10
+          10,
         );
       });
     }
@@ -248,6 +254,10 @@ describe('data provider', () => {
     });
 
     describe('first level', () => {
+      it('should set itemHasChildren path by default', () => {
+        expect(grid.itemHasChildrenPath).to.equal('children');
+      });
+
       it('should have collapsed items by default', () => {
         for (let i = 0; i < grid._effectiveSize; i++) {
           expect(isIndexExpanded(grid, i)).to.be.false;
@@ -295,7 +305,8 @@ describe('data provider', () => {
 
       it('should request second level items', () => {
         expandIndex(grid, 7);
-        expect(grid.dataProvider.callCount).to.equal(3);
+        // First level (2 pages) + second level (2 pages) = 4 data requests
+        expect(grid.dataProvider.callCount).to.equal(4);
         expect(grid.dataProvider.getCall(2).args[0].parentItem.value).to.equal('foo7');
       });
 
@@ -311,7 +322,6 @@ describe('data provider', () => {
 
         grid.dataProvider.resetHistory();
         const renderSpy = sinon.spy(grid, '_effectiveSizeChanged');
-        const increasePoolSpy = sinon.spy(grid, '_increasePoolIfNeeded');
         const updateItemSpy = sinon.spy(grid, '_updateItem');
         grid.clearCache();
 
@@ -319,7 +329,6 @@ describe('data provider', () => {
 
         // Effective size should change in between the data requests
         expect(renderSpy.called).to.be.true;
-        expect(increasePoolSpy.callCount).to.above(1);
         expect(updateItemSpy.callCount).to.be.below(180);
       });
 
@@ -330,20 +339,22 @@ describe('data provider', () => {
         expandIndex(grid, 0);
         expect(isIndexExpanded(grid, 0)).to.be.true;
         grid.itemIdPath = 'id';
-        grid.render();
+        grid.requestContentUpdate();
         expect(isIndexExpanded(grid, 0)).to.be.true;
       });
 
       ['renderer', 'template'].forEach((type) => {
         describe(`${type}`, () => {
           beforeEach(() => {
-            if (type == 'renderer') {
+            if (type === 'renderer') {
               grid = fixtureSync(`
                 <vaadin-grid>
                   <vaadin-grid-column></vaadin-grid-column>
                 </vaadin-grid>
               `);
-              grid.firstElementChild.renderer = (root, col, model) => (root.textContent = model.index);
+              grid.firstElementChild.renderer = (root, col, model) => {
+                root.textContent = model.index;
+              };
               grid.pageSize = 5;
               grid.dataProvider = sinon.spy(finiteDataProvider);
               flushGrid(grid);
@@ -352,10 +363,10 @@ describe('data provider', () => {
 
           it('should assign expanded property', () => {
             const cell = getContainerCell(grid.$.items, 0, 0);
-            let model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+            let model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
             expect(model.expanded).to.be.false;
             expandIndex(grid, 0);
-            model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+            model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
             expect(model.expanded).to.be.true;
           });
 
@@ -364,15 +375,15 @@ describe('data provider', () => {
             expandIndex(grid, 1);
 
             let cell = getContainerCell(grid.$.items, 0, 0);
-            let model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+            let model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
             expect(model.level).to.equal(0);
 
             cell = getContainerCell(grid.$.items, 1, 0);
-            model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+            model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
             expect(model.level).to.equal(1);
 
             cell = getContainerCell(grid.$.items, 2, 0);
-            model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+            model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
             expect(model.level).to.equal(2);
           });
 
@@ -381,23 +392,23 @@ describe('data provider', () => {
             flushGrid(grid);
 
             const cell = getContainerCell(grid.$.items, 10, 0);
-            const model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+            const model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
             expect(model.level).to.equal(1);
           });
 
           it('should restore tree after cache is cleared', () => {
             grid.getItemId = (item) => {
-              return item !== undefined ? item.level + '-' + item.value : undefined;
+              return item !== undefined ? `${item.level}-${item.value}` : undefined;
             };
             expandIndex(grid, 0);
 
             let cell = getContainerCell(grid.$.items, 1, 0);
-            let model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+            let model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
             expect(model.level).to.equal(1);
 
             grid.clearCache();
             cell = getContainerCell(grid.$.items, 1, 0);
-            model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+            model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
             expect(model.level).to.equal(1);
           });
         });
@@ -410,19 +421,8 @@ describe('data provider', () => {
         expect(getRows(grid.$.items)[0].hasAttribute('expanded')).to.be.false;
       });
 
-      it('should toggle aria-level attribute on the row', () => {
-        expect(getRowCells(getRows(grid.$.items)[2])[0].getAttribute('aria-level')).to.equal(null);
-        expect(getRows(grid.$.items)[2].getAttribute('aria-level')).to.equal('1');
-        expandIndex(grid, 0);
-        expect(getRowCells(getRows(grid.$.items)[2])[0].getAttribute('aria-level')).to.equal(null);
-        expect(getRows(grid.$.items)[2].getAttribute('aria-level')).to.equal('2');
-        expandIndex(grid, 1);
-        expect(getRowCells(getRows(grid.$.items)[2])[0].getAttribute('aria-level')).to.equal(null);
-        expect(getRows(grid.$.items)[2].getAttribute('aria-level')).to.equal('3');
-      });
-
       it('should request pages from 0', () => {
-        expandIndex(grid, 7); // pageSize is 5, index 7 is on the second page
+        expandIndex(grid, 7); // PageSize is 5, index 7 is on the second page
         expect(grid.dataProvider.getCall(2).args[0].page).to.equal(0);
       });
 
@@ -451,17 +451,15 @@ describe('data provider', () => {
             if (!params.parentItem) {
               // Resolve normally for root level items
               finiteDataProvider(params, callback);
-            } else {
-              if (params.parentItem.value === 'foo0' && params.page === 0) {
-                // Resolve asynchronously for the first expanded item only
-                setTimeout(() => {
-                  finiteDataProvider(params, callback);
-                  // Only the root-level items (10) should be rendered at this point even though the
-                  // data request for the first expanded item resolved
-                  expect(grid._effectiveSize).to.equal(10);
-                  done();
-                }, 0);
-              }
+            } else if (params.parentItem.value === 'foo0' && params.page === 0) {
+              // Resolve asynchronously for the first expanded item only
+              setTimeout(() => {
+                finiteDataProvider(params, callback);
+                // Only the root-level items (10) should be rendered at this point even though the
+                // data request for the first expanded item resolved
+                expect(grid._effectiveSize).to.equal(10);
+                done();
+              }, 0);
             }
           };
 
@@ -477,19 +475,17 @@ describe('data provider', () => {
             if (!params.parentItem) {
               // Resolve normally for root level items
               finiteDataProvider(params, callback);
-            } else {
-              if (params.parentItem.value === 'foo0' && params.page === 0) {
-                // Resolve asynchronously for the first expanded item only
-                setTimeout(() => {
-                  finiteDataProvider(params, callback);
-                  flushGrid(grid);
-                  // The root-level items (10) and the first child item children (10), 20 in total,
-                  // should be rendered at this point even though the data request for the second expanded
-                  // item hasn't still been resolved
-                  expect(grid._effectiveSize).to.equal(20);
-                  done();
-                }, 0);
-              }
+            } else if (params.parentItem.value === 'foo0' && params.page === 0) {
+              // Resolve asynchronously for the first expanded item only
+              setTimeout(() => {
+                finiteDataProvider(params, callback);
+                flushGrid(grid);
+                // The root-level items (10) and the first child item children (10), 20 in total,
+                // should be rendered at this point even though the data request for the second expanded
+                // item hasn't still been resolved
+                expect(grid._effectiveSize).to.equal(20);
+                done();
+              }, 0);
             }
           };
 
@@ -522,8 +518,9 @@ describe('data provider', () => {
       });
 
       it('should not request', () => {
+        grid.dataProvider.resetHistory();
         collapseIndex(grid, 7);
-        expect(grid.dataProvider.callCount).to.equal(3);
+        expect(grid.dataProvider.callCount).to.equal(0);
       });
 
       it('should decrease full size', () => {
@@ -545,8 +542,9 @@ describe('data provider', () => {
       });
 
       it('should not request', () => {
+        grid.dataProvider.resetHistory();
         expandIndex(grid, 7);
-        expect(grid.dataProvider.callCount).to.equal(3);
+        expect(grid.dataProvider.callCount).to.equal(0);
       });
 
       it('should increase full size', () => {
@@ -632,10 +630,10 @@ describe('wrapped grid', () => {
     it('should call dataProvider multiple times to load all items', async () => {
       container.dataProvider.resetHistory();
       grid.style.fontSize = '12px';
-      grid.pageSize = 10;
+      grid.pageSize = 5;
       flushGrid(grid);
       await aTimeout(loadDebounceTime);
-      // assuming grid has about 30 items
+      // Assuming grid has about 18 items
       expect(container.dataProvider.callCount).to.be.above(2);
       for (let i = 0; i < container.dataProvider.callCount; i++) {
         expect(container.dataProvider.getCall(i).args[0].page).to.eql(i);
@@ -655,7 +653,7 @@ describe('wrapped grid', () => {
 
     it('should cache fetched pages', async () => {
       grid.pageSize = 10;
-      // wait first to initially load first pages.
+      // Wait first to initially load first pages.
       await aTimeout(loadDebounceTime);
       await simulateScrollToEnd(grid);
       container.dataProvider.resetHistory();
@@ -762,7 +760,7 @@ describe('wrapped grid', () => {
       const row = getRows(grid.$.items)[0];
       scrollToEnd(grid);
       expect(row.hasAttribute('loading')).to.be.true;
-      grid._scrollToIndex(0);
+      grid.scrollToIndex(0);
       expect(row.hasAttribute('loading')).to.be.false;
     });
 
@@ -777,16 +775,18 @@ describe('wrapped grid', () => {
       grid.size = 5000;
       flushGrid(grid);
       scrollToEnd(grid);
-      expect(grid.lastVisibleIndex + grid._vidxOffset).to.equal(grid.size - 1);
+      expect(getLastVisibleItem(grid).index).to.equal(grid.size - 1);
 
       grid.size = 50;
       flushGrid(grid);
-      expect(grid.lastVisibleIndex + grid._vidxOffset).to.equal(grid.size - 1);
+      expect(getLastVisibleItem(grid).index).to.equal(grid.size - 1);
 
       // Test actual last visible item
       const rect = grid.getBoundingClientRect();
-      const lastVisibleItem = grid.getRootNode().elementFromPoint(rect.left + 15, rect.bottom - 15);
-      expect(lastVisibleItem.innerText.trim()).to.equal('foo' + (grid.size - 1));
+      const lastRowCenterX = rect.left + grid.offsetWidth / 2;
+      const lastRowCenterY = rect.bottom - getPhysicalAverage(grid) / 2;
+      const lastVisibleItem = grid.getRootNode().elementFromPoint(lastRowCenterX, lastRowCenterY);
+      expect(lastVisibleItem.innerText.trim()).to.equal(`foo${grid.size - 1}`);
     });
   });
 });

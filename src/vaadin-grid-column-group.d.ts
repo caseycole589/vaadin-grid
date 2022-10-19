@@ -1,4 +1,10 @@
-import { ColumnBaseMixin, GridColumnElement } from './vaadin-grid-column.js';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { GridDefaultItem } from './vaadin-grid.js';
+import type { ColumnBaseMixinClass } from './vaadin-grid-column.js';
 
 /**
  * A `<vaadin-grid-column-group>` is used to make groups of columns in `<vaadin-grid>` and
@@ -6,25 +12,30 @@ import { ColumnBaseMixin, GridColumnElement } from './vaadin-grid-column.js';
  *
  * Groups can be nested to create complex header and footer configurations.
  *
- * The `class` attribute is used to differentiate header and footer templates.
- *
  * #### Example:
  * ```html
- * <vaadin-grid-column-group resizable>
- *  <template class="header">Name</template>
- *
- *  <vaadin-grid-column>
- *    <template class="header">First</template>
- *    <template>[[item.name.first]]</template>
- *  </vaadin-grid-column>
- *  <vaadin-grid-column>
- *    <template class="header">Last</template>
- *    <template>[[item.name.last]]</template>
- *  </vaadin-grid-column>
+ * <vaadin-grid-column-group resizable id="columnGroup">
+ *   <vaadin-grid-column id="column1"></vaadin-grid-column>
+ *   <vaadin-grid-column id="column2"></vaadin-grid-column>
  * </vaadin-grid-column-group>
  * ```
+ *
+ * ```js
+ * const columnGroup = document.querySelector('#columnGroup');
+ * columnGroup.headerRenderer = (root, columnGroup) => {
+ *   root.textContent = 'header';
+ * }
+ *
+ * const column1 = document.querySelector('#column1');
+ * column1.headerRenderer = (root, column) => { ... };
+ * column1.renderer = (root, column, model) => { ... };
+ *
+ * const column2 = document.querySelector('#column2');
+ * column2.headerRenderer = (root, column) => { ... };
+ * column2.renderer = (root, column, model) => { ... };
+ * ```
  */
-declare class GridColumnGroupElement extends ColumnBaseMixin(HTMLElement) {
+declare class GridColumnGroup extends HTMLElement {
   /**
    * Flex grow ratio for the column group as the sum of the ratios of its child columns.
    * @attr {number} flex-grow
@@ -35,20 +46,14 @@ declare class GridColumnGroupElement extends ColumnBaseMixin(HTMLElement) {
    * Width of the column group as the sum of the widths of its child columns.
    */
   readonly width: string | null | undefined;
-
-  _columnPropChanged(path: string, value?: unknown | null): void;
-
-  _updateFlexAndWidth(): void;
-
-  _getChildColumns(el: GridColumnGroupElement): GridColumnElement[];
-
-  _isColumnElement(node: Node): boolean;
 }
+
+interface GridColumnGroup<TItem = GridDefaultItem> extends ColumnBaseMixinClass<TItem> {}
 
 declare global {
   interface HTMLElementTagNameMap {
-    'vaadin-grid-column-group': GridColumnGroupElement;
+    'vaadin-grid-column-group': GridColumnGroup<GridDefaultItem>;
   }
 }
 
-export { GridColumnGroupElement };
+export { GridColumnGroup };

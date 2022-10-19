@@ -1,47 +1,38 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
-import { html } from '@polymer/polymer/lib/utils/html-tag.js';
+import './vaadin-grid-column.js';
+import './vaadin-grid-styles.js';
 import { beforeNextRender } from '@polymer/polymer/lib/utils/render-status.js';
-import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
-import { timeOut, animationFrame } from '@polymer/polymer/lib/utils/async.js';
-import { ElementMixin } from '@vaadin/vaadin-element-mixin/vaadin-element-mixin.js';
+import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
+import { isAndroid, isChrome, isFirefox, isIOS, isSafari, isTouch } from '@vaadin/component-base/src/browser-utils.js';
+import { ElementMixin } from '@vaadin/component-base/src/element-mixin.js';
+import { TabindexMixin } from '@vaadin/component-base/src/tabindex-mixin.js';
+import { processTemplates } from '@vaadin/component-base/src/templates.js';
+import { Virtualizer } from '@vaadin/component-base/src/virtualizer.js';
 import { ThemableMixin } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
-import { ScrollerElement } from './vaadin-grid-scroller.js';
 import { A11yMixin } from './vaadin-grid-a11y-mixin.js';
 import { ActiveItemMixin } from './vaadin-grid-active-item-mixin.js';
 import { ArrayDataProviderMixin } from './vaadin-grid-array-data-provider-mixin.js';
+import { ColumnReorderingMixin } from './vaadin-grid-column-reordering-mixin.js';
 import { ColumnResizingMixin } from './vaadin-grid-column-resizing-mixin.js';
 import { DataProviderMixin } from './vaadin-grid-data-provider-mixin.js';
+import { DragAndDropMixin } from './vaadin-grid-drag-and-drop-mixin.js';
 import { DynamicColumnsMixin } from './vaadin-grid-dynamic-columns-mixin.js';
 import { EventContextMixin } from './vaadin-grid-event-context-mixin.js';
 import { FilterMixin } from './vaadin-grid-filter-mixin.js';
+import { KeyboardNavigationMixin } from './vaadin-grid-keyboard-navigation-mixin.js';
 import { RowDetailsMixin } from './vaadin-grid-row-details-mixin.js';
 import { ScrollMixin } from './vaadin-grid-scroll-mixin.js';
 import { SelectionMixin } from './vaadin-grid-selection-mixin.js';
 import { SortMixin } from './vaadin-grid-sort-mixin.js';
 import { StylingMixin } from './vaadin-grid-styling-mixin.js';
-import { DragAndDropMixin } from './vaadin-grid-drag-and-drop-mixin.js';
-import { KeyboardNavigationMixin } from './vaadin-grid-keyboard-navigation-mixin.js';
-import { ColumnReorderingMixin } from './vaadin-grid-column-reordering-mixin.js';
-import './vaadin-grid-column.js';
-import './vaadin-grid-styles.js';
-
-const TOUCH_DEVICE = (() => {
-  try {
-    document.createEvent('TouchEvent');
-    return true;
-  } catch (e) {
-    return false;
-  }
-})();
 
 /**
  * `<vaadin-grid>` is a free, high quality data grid / data table Web Component. The content of the
- * the grid can be populated in two ways: imperatively by using renderer callback function and
- * declaratively by using Polymer's Templates.
+ * the grid can be populated by using renderer callback function.
  *
  * ### Quick Start
  *
@@ -109,26 +100,16 @@ const TOUCH_DEVICE = (() => {
  * };
  * ```
  *
- * Alternatively, the content can be provided with Polymer's Templates:
+ * The following properties are available in the `model` argument:
  *
- * #### Example:
- * ```html
- * <vaadin-grid items='[{"name": "John", "surname": "Lennon", "role": "singer"},
- * {"name": "Ringo", "surname": "Starr", "role": "drums"}]'>
- *   <vaadin-grid-column>
- *     <template class="header">Name</template>
- *     <template>[[item.name]]</template>
- *   </vaadin-grid-column>
- *   <vaadin-grid-column>
- *     <template class="header">Surname</template>
- *     <template>[[item.surname]]</template>
- *   </vaadin-grid-column>
- *   <vaadin-grid-column>
- *     <template class="header">Role</template>
- *     <template>[[item.role]]</template>
- *   </vaadin-grid-column>
- * </vaadin-grid>
- * ```
+ * Property name | Type | Description
+ * --------------|------|------------
+ * `index`| Number | The index of the item.
+ * `item` | String or Object | The item.
+ * `level` | Number | Number of the item's tree sublevel, starts from 0.
+ * `expanded` | Boolean | True if the item's tree sublevel is expanded.
+ * `selected` | Boolean | True if the item is selected.
+ * `detailsOpened` | Boolean | True if the item's row details are open.
  *
  * The following helper elements can be used for further customization:
  * - [`<vaadin-grid-column-group>`](#/elements/vaadin-grid-column-group)
@@ -139,19 +120,6 @@ const TOUCH_DEVICE = (() => {
  *
  * __Note that the helper elements must be explicitly imported.__
  * If you want to import everything at once you can use the `all-imports.html` bundle.
- *
- * A column template can be decorated with one the following class names to specify its purpose
- * - `header`: Marks a header template
- * - `footer`: Marks a footer template
- * - `row-details`: Marks a row details template
- *
- * The following built-in template variables can be bound to inside the column templates:
- * - `[[index]]`: Number representing the row index
- * - `[[item]]` and it's sub-properties: Data object (provided by a data provider / items array)
- * - `{{selected}}`: True if the item is selected (can be two-way bound)
- * - `{{detailsOpened}}`: True if the item has row details opened (can be two-way bound)
- * - `{{expanded}}`: True if the item has tree sublevel expanded (can be two-way bound)
- * - `[[level]]`: Number of the tree sublevel of the item, first level-items have 0
  *
  * ### Lazy Loading with Function Data Provider
  *
@@ -172,20 +140,16 @@ const TOUCH_DEVICE = (() => {
  * in the second argument of the data provider callback:__
  *
  * ```javascript
- * grid.dataProvider = function(params, callback) {
- *   const url = 'https://api.example/data' +
- *       '?page=' + params.page +        // the requested page index
- *       '&per_page=' + params.pageSize; // number of items on the page
- *   const xhr = new XMLHttpRequest();
- *   xhr.onload = function() {
- *     const response = JSON.parse(xhr.responseText);
- *     callback(
- *       response.employees, // requested page of items
- *       response.totalSize  // total number of items
- *     );
- *   };
- *   xhr.open('GET', url, true);
- *   xhr.send();
+ * grid.dataProvider = ({page, pageSize}, callback) => {
+ *   // page: the requested page index
+ *   // pageSize: number of items on one page
+ *   const url = `https://api.example/data?page=${page}&per_page=${pageSize}`;
+ *
+ *   fetch(url)
+ *     .then((res) => res.json())
+ *     .then(({ employees, totalSize }) => {
+ *       callback(employees, totalSize);
+ *     });
  * };
  * ```
  *
@@ -193,17 +157,12 @@ const TOUCH_DEVICE = (() => {
  *
  * ```javascript
  * grid.size = 200; // The total number of items
- * grid.dataProvider = function(params, callback) {
- *   const url = 'https://api.example/data' +
- *       '?page=' + params.page +        // the requested page index
- *       '&per_page=' + params.pageSize; // number of items on the page
- *   const xhr = new XMLHttpRequest();
- *   xhr.onload = function() {
- *     const response = JSON.parse(xhr.responseText);
- *     callback(response.employees);
- *   };
- *   xhr.open('GET', url, true);
- *   xhr.send();
+ * grid.dataProvider = ({page, pageSize}, callback) => {
+ *   const url = `https://api.example/data?page=${page}&per_page=${pageSize}`;
+ *
+ *   fetch(url)
+ *     .then((res) => res.json())
+ *     .then((resJson) => callback(resJson.employees));
  * };
  * ```
  *
@@ -229,14 +188,14 @@ const TOUCH_DEVICE = (() => {
  * `loading` | Set when the grid is loading data from data provider | :host
  * `interacting` | Keyboard navigation in interaction mode | :host
  * `navigating` | Keyboard navigation in navigation mode | :host
- * `overflow` | Set when rows are overflowing the grid viewport. Possible values: `top`, `bottom`, `left`, `right` | :host
+ * `overflow` | Set when rows are overflowing the grid viewport. Possible values: `top`, `bottom`, `start`, `end` | :host
  * `reordering` | Set when the grid's columns are being reordered | :host
  * `dragover` | Set when the grid (not a specific row) is dragged over | :host
- * `dragging-rows` : Set when grid rows are dragged  | :host
+ * `dragging-rows` | Set when grid rows are dragged  | :host
  * `reorder-status` | Reflects the status of a cell while columns are being reordered | cell
  * `frozen` | Frozen cell | cell
  * `last-frozen` | Last frozen cell | cell
- * * `first-column` | First visible cell on a row | cell
+ * `first-column` | First visible cell on a row | cell
  * `last-column` | Last visible cell on a row | cell
  * `selected` | Selected row | row
  * `expanded` | Expanded row | row
@@ -244,15 +203,17 @@ const TOUCH_DEVICE = (() => {
  * `loading` | Row that is waiting for data from data provider | row
  * `odd` | Odd row | row
  * `first` | The first body row | row
+ * `last` | The last body row | row
  * `dragstart` | Set for one frame when drag of a row is starting. The value is a number when multiple rows are dragged | row
  * `dragover` | Set when the row is dragged over | row
  * `drag-disabled` | Set to a row that isn't available for dragging | row
  * `drop-disabled` | Set to a row that can't be dropped on top of | row
  *
- * See [ThemableMixin – how to apply styles for shadow parts](https://github.com/vaadin/vaadin-themable-mixin/wiki)
+ * See [Styling Components](https://vaadin.com/docs/latest/styling/custom-theme/styling-components) documentation.
  *
  * @fires {CustomEvent} active-item-changed - Fired when the `activeItem` property changes.
  * @fires {CustomEvent} cell-activate - Fired when the cell is activated with click or keyboard.
+ * @fires {CustomEvent} cell-focus - Fired when a cell is focused with click or keyboard navigation.
  * @fires {CustomEvent} column-reorder - Fired when the columns in the grid are reordered.
  * @fires {CustomEvent} column-resize - Fired when the grid column resize is finished.
  * @fires {CustomEvent} expanded-items-changed - Fired when the `expandedItems` property changes.
@@ -262,7 +223,7 @@ const TOUCH_DEVICE = (() => {
  * @fires {CustomEvent} loading-changed - Fired when the `loading` property changes.
  * @fires {CustomEvent} selected-items-changed - Fired when the `selectedItems` property changes.
  *
- * @extends ScrollerElement
+ * @extends HTMLElement
  * @mixes ElementMixin
  * @mixes ThemableMixin
  * @mixes A11yMixin
@@ -282,7 +243,7 @@ const TOUCH_DEVICE = (() => {
  * @mixes StylingMixin
  * @mixes DragAndDropMixin
  */
-class GridElement extends ElementMixin(
+class Grid extends ElementMixin(
   ThemableMixin(
     DataProviderMixin(
       ArrayDataProviderMixin(
@@ -296,20 +257,22 @@ class GridElement extends ElementMixin(
                       A11yMixin(
                         FilterMixin(
                           ColumnReorderingMixin(
-                            ColumnResizingMixin(EventContextMixin(DragAndDropMixin(StylingMixin(ScrollerElement))))
-                          )
-                        )
-                      )
-                    )
-                  )
-                )
-              )
-            )
-          )
-        )
-      )
-    )
-  )
+                            ColumnResizingMixin(
+                              EventContextMixin(DragAndDropMixin(StylingMixin(TabindexMixin(PolymerElement)))),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  ),
 ) {
   static get template() {
     return html`
@@ -320,7 +283,7 @@ class GridElement extends ElementMixin(
         loading$="[[loading]]"
         column-reordering-allowed$="[[columnReorderingAllowed]]"
       >
-        <table id="table" role="grid" aria-multiselectable="true" tabindex="0">
+        <table id="table" role="treegrid" aria-multiselectable="true" tabindex="0">
           <caption id="sizer" part="row"></caption>
           <thead id="header" role="rowgroup"></thead>
           <tbody id="items" role="rowgroup"></tbody>
@@ -338,12 +301,11 @@ class GridElement extends ElementMixin(
     return 'vaadin-grid';
   }
 
-  static get version() {
-    return '6.0.2';
-  }
-
   static get observers() {
-    return ['_columnTreeChanged(_columnTree, _columnTree.*)'];
+    return [
+      '_columnTreeChanged(_columnTree, _columnTree.*)',
+      '_effectiveSizeChanged(_effectiveSize, __virtualizer, _hasData, _columnTree)',
+    ];
   }
 
   static get properties() {
@@ -351,33 +313,31 @@ class GridElement extends ElementMixin(
       /** @private */
       _safari: {
         type: Boolean,
-        value: /^((?!chrome|android).)*safari/i.test(navigator.userAgent)
+        value: isSafari,
       },
 
       /** @private */
       _ios: {
         type: Boolean,
-        value:
-          (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) ||
-          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+        value: isIOS,
       },
 
       /** @private */
       _firefox: {
         type: Boolean,
-        value: navigator.userAgent.toLowerCase().indexOf('firefox') > -1
+        value: isFirefox,
       },
 
       /** @private */
       _android: {
         type: Boolean,
-        value: /android/i.test(navigator.userAgent)
+        value: isAndroid,
       },
 
       /** @private */
       _touchDevice: {
         type: Boolean,
-        value: TOUCH_DEVICE
+        value: isTouch,
       },
 
       /**
@@ -385,21 +345,36 @@ class GridElement extends ElementMixin(
        *
        * Effectively, this disables the grid's virtual scrolling so that all the rows are rendered in the DOM at once.
        * If the grid has a large number of items, using the feature is discouraged to avoid performance issues.
-       * @attr {boolean} height-by-rows
+       * @attr {boolean} all-rows-visible
        * @type {boolean}
        */
-      heightByRows: {
+      allRowsVisible: {
         type: Boolean,
         value: false,
         reflectToAttribute: true,
-        observer: '_heightByRowsChanged'
       },
 
       /** @private */
       _recalculateColumnWidthOnceLoadingFinished: {
         type: Boolean,
-        value: true
-      }
+        value: true,
+      },
+
+      /** @private */
+      isAttached: {
+        value: false,
+      },
+
+      /**
+       * An internal property that is mainly used by `vaadin-template-renderer`
+       * to identify grid elements.
+       *
+       * @private
+       */
+      __gridElement: {
+        type: Boolean,
+        value: true,
+      },
     };
   }
 
@@ -411,7 +386,73 @@ class GridElement extends ElementMixin(
   /** @protected */
   connectedCallback() {
     super.connectedCallback();
+    this.isAttached = true;
     this.recalculateColumnWidths();
+  }
+
+  /** @protected */
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.isAttached = false;
+  }
+
+  /** @private */
+  __getFirstVisibleItem() {
+    return this._getVisibleRows().find((row) => this._isInViewport(row));
+  }
+
+  /** @private */
+  get _firstVisibleIndex() {
+    const firstVisibleItem = this.__getFirstVisibleItem();
+    return firstVisibleItem ? firstVisibleItem.index : undefined;
+  }
+
+  /** @private */
+  __getLastVisibleItem() {
+    return this._getVisibleRows()
+      .reverse()
+      .find((row) => this._isInViewport(row));
+  }
+
+  /** @private */
+  get _lastVisibleIndex() {
+    const lastVisibleItem = this.__getLastVisibleItem();
+    return lastVisibleItem ? lastVisibleItem.index : undefined;
+  }
+
+  /** @private */
+  _isInViewport(item) {
+    const scrollTargetRect = this.$.table.getBoundingClientRect();
+    const itemRect = item.getBoundingClientRect();
+    const headerHeight = this.$.header.getBoundingClientRect().height;
+    const footerHeight = this.$.footer.getBoundingClientRect().height;
+    return (
+      itemRect.bottom > scrollTargetRect.top + headerHeight && itemRect.top < scrollTargetRect.bottom - footerHeight
+    );
+  }
+
+  /** @private */
+  _getVisibleRows() {
+    return Array.from(this.$.items.children)
+      .filter((item) => !item.hidden)
+      .sort((a, b) => a.index - b.index);
+  }
+
+  /** @protected */
+  ready() {
+    super.ready();
+
+    this.__virtualizer = new Virtualizer({
+      createElements: this._createScrollerRows.bind(this),
+      updateElement: this._updateScrollerItem.bind(this),
+      scrollContainer: this.$.items,
+      scrollTarget: this.$.table,
+      reorderElements: true,
+    });
+
+    new ResizeObserver(() => setTimeout(() => this.__updateFooterPositioning())).observe(this.$.footer);
+
+    processTemplates(this);
   }
 
   /**
@@ -424,7 +465,46 @@ class GridElement extends ElementMixin(
     super.attributeChangedCallback(name, oldValue, newValue);
     if (name === 'dir') {
       this.__isRTL = newValue === 'rtl';
-      this._updateScrollerMeasurements();
+    }
+  }
+
+  /** @private */
+  __getBodyCellCoordinates(cell) {
+    if (this.$.items.contains(cell) && cell.localName === 'td') {
+      return {
+        item: cell.parentElement._item,
+        column: cell._column,
+      };
+    }
+  }
+
+  /** @private */
+  __focusBodyCell({ item, column }) {
+    const row = this._getVisibleRows().find((row) => row._item === item);
+    const cell = row && [...row.children].find((cell) => cell._column === column);
+    if (cell) {
+      cell.focus();
+    }
+  }
+
+  /** @private */
+  _effectiveSizeChanged(effectiveSize, virtualizer, hasData, columnTree) {
+    if (virtualizer && hasData && columnTree) {
+      // Changing the virtualizer size may result in the row with focus getting hidden
+      const cell = this.shadowRoot.activeElement;
+      const cellCoordinates = this.__getBodyCellCoordinates(cell);
+
+      virtualizer.size = effectiveSize;
+      virtualizer.update();
+      virtualizer.flush();
+
+      // If the focused cell's parent row got hidden by the size change, focus the corresponding new cell
+      if (cellCoordinates && cell.parentElement.hidden) {
+        this.__focusBodyCell(cellCoordinates);
+      }
+
+      // Make sure the body has a tabbable element
+      this._resetKeyboardNavigation();
     }
   }
 
@@ -445,37 +525,82 @@ class GridElement extends ElementMixin(
     }
   }
 
+  /** @private */
+  __getIntrinsicWidth(col) {
+    const initialWidth = col.width;
+    const initialFlexGrow = col.flexGrow;
+
+    col.width = 'auto';
+    col.flexGrow = 0;
+
+    // Note: _allCells only contains cells which are currently rendered in DOM
+    const width = col._allCells
+      .filter((cell) => {
+        // Exclude body cells that are out of the visible viewport
+        return !this.$.items.contains(cell) || this._isInViewport(cell.parentElement);
+      })
+      .reduce((width, cell) => {
+        // Add 1px buffer to the offset width to avoid too narrow columns (sub-pixel rendering)
+        return Math.max(width, cell.offsetWidth + 1);
+      }, 0);
+
+    col.flexGrow = initialFlexGrow;
+    col.width = initialWidth;
+
+    return width;
+  }
+
+  /** @private */
+  __getDistributedWidth(col, innerColumn) {
+    if (col == null || col === this) {
+      return 0;
+    }
+
+    const columnWidth = Math.max(this.__getIntrinsicWidth(col), this.__getDistributedWidth(col.parentElement, col));
+
+    // We're processing a regular grid-column and not a grid-column-group
+    if (!innerColumn) {
+      return columnWidth;
+    }
+
+    // At the end, the width of each vaadin-grid-column-group is determined by the sum of the width of its children.
+    // Here we determine how much space the vaadin-grid-column-group actually needs to render properly and then we distribute that space
+    // to its children, so when we actually do the summation it will be rendered properly.
+    // Check out vaadin-grid-column-group:_updateFlexAndWidth
+    const columnGroup = col;
+    const columnGroupWidth = columnWidth;
+    const sumOfWidthOfAllChildColumns = columnGroup._visibleChildColumns
+      .map((col) => this.__getIntrinsicWidth(col))
+      .reduce((sum, curr) => sum + curr, 0);
+
+    const extraNecessarySpaceForGridColumnGroup = Math.max(0, columnGroupWidth - sumOfWidthOfAllChildColumns);
+
+    // The distribution of the extra necessary space is done according to the intrinsic width of each child column.
+    // Lets say we need 100 pixels of extra space for the grid-column-group to render properly
+    // it has two grid-column children, |100px|300px| in total 400px
+    // the first column gets 25px of the additional space (100/400)*100 = 25
+    // the second column gets the 75px of the additional space (300/400)*100 = 75
+    const proportionOfExtraSpace = this.__getIntrinsicWidth(innerColumn) / sumOfWidthOfAllChildColumns;
+    const shareOfInnerColumnFromNecessaryExtraSpace = proportionOfExtraSpace * extraNecessarySpaceForGridColumnGroup;
+
+    return this.__getIntrinsicWidth(innerColumn) + shareOfInnerColumnFromNecessaryExtraSpace;
+  }
+
   /**
-   * @param {!Array<!GridColumnElement>} cols the columns to auto size based on their content width
+   * @param {!Array<!GridColumn>} cols the columns to auto size based on their content width
    * @private
    */
   _recalculateColumnWidths(cols) {
-    // Note: The `cols.forEach()` loops below could be implemented as a single loop but this has been
-    // split for performance reasons to batch these similar actions [write/read] together to avoid
-    // unnecessary layout trashing.
+    // Flush to make sure DOM is up-to-date when measuring the column widths
+    this.__virtualizer.flush();
 
-    // [write] Set automatic width for all cells (breaks column alignment)
+    // Flush to account for any changes to the visibility of the columns
+    if (this._debouncerHiddenChanged) {
+      this._debouncerHiddenChanged.flush();
+    }
+
     cols.forEach((col) => {
-      col.width = 'auto';
-      col._origFlexGrow = col.flexGrow;
-      col.flexGrow = 0;
-    });
-    // [read] Measure max cell width in each column
-    cols.forEach((col) => {
-      col._currentWidth = 0;
-      // Note: _allCells only contains cells which are currently rendered in DOM
-      col._allCells.forEach((c) => {
-        // Add 1px buffer to the offset width to avoid too narrow columns (sub-pixel rendering)
-        const cellWidth = c.offsetWidth + 1;
-        col._currentWidth = Math.max(col._currentWidth, cellWidth);
-      });
-    });
-    // [write] Set column widths to fit widest measured content
-    cols.forEach((col) => {
-      col.width = `${col._currentWidth}px`;
-      col.flexGrow = col._origFlexGrow;
-      col._currentWidth = undefined;
-      col._origFlexGrow = undefined;
+      col.width = `${this.__getDistributedWidth(col)}px`;
     });
   }
 
@@ -501,6 +626,7 @@ class GridElement extends ElementMixin(
       const row = document.createElement('tr');
       row.setAttribute('part', 'row');
       row.setAttribute('role', 'row');
+      row.setAttribute('tabindex', '-1');
       if (this._columnTree) {
         this._updateRow(row, this._columnTree[this._columnTree.length - 1], 'body', false, true);
       }
@@ -509,26 +635,23 @@ class GridElement extends ElementMixin(
 
     if (this._columnTree) {
       this._columnTree[this._columnTree.length - 1].forEach(
-        (c) => c.isConnected && c.notifyPath && c.notifyPath('_cells.*', c._cells)
+        (c) => c.isConnected && c.notifyPath && c.notifyPath('_cells.*', c._cells),
       );
     }
 
     beforeNextRender(this, () => {
       this._updateFirstAndLastColumn();
       this._resetKeyboardNavigation();
+      this._afterScroll();
+      this.__itemsReceived();
     });
     return rows;
   }
 
   /** @private */
-  _getRowTarget() {
-    return this.$.items;
-  }
-
-  /** @private */
   _createCell(tagName) {
     const contentId = (this._contentIndex = this._contentIndex + 1 || 0);
-    const slotName = 'vaadin-grid-cell-content-' + contentId;
+    const slotName = `vaadin-grid-cell-content-${contentId}`;
 
     const cellContent = document.createElement('vaadin-grid-cell-content');
     cellContent.setAttribute('slot', slotName);
@@ -549,13 +672,16 @@ class GridElement extends ElementMixin(
     // focusable slot wrapper, that is why cells are not focused with
     // mousedown. Workaround: listen for mousedown and focus manually.
     cellContent.addEventListener('mousedown', () => {
-      if (window.chrome) {
+      if (isChrome) {
         // Chrome bug: focusing before mouseup prevents text selection, see http://crbug.com/771903
-        const mouseUpListener = () => {
-          if (!cellContent.contains(this.getRootNode().activeElement)) {
+        const mouseUpListener = (event) => {
+          // If focus is on element within the cell content — respect it, do not change
+          const contentContainsFocusedElement = cellContent.contains(this.getRootNode().activeElement);
+          // Only focus if mouse is released on cell content itself
+          const mouseUpWithinCell = event.composedPath().includes(cellContent);
+          if (!contentContainsFocusedElement && mouseUpWithinCell) {
             cell.focus();
           }
-          // If focus is in the cell content — respect it, do not change.
           document.removeEventListener('mouseup', mouseUpListener, true);
         };
         document.addEventListener('mouseup', mouseUpListener, true);
@@ -575,22 +701,23 @@ class GridElement extends ElementMixin(
 
   /**
    * @param {!HTMLTableRowElement} row
-   * @param {!Array<!GridColumnElement>} columns
+   * @param {!Array<!GridColumn>} columns
    * @param {?string} section
    * @param {boolean} isColumnRow
    * @param {boolean} noNotify
    * @protected
    */
+  // eslint-disable-next-line max-params
   _updateRow(row, columns, section, isColumnRow, noNotify) {
     section = section || 'body';
 
     const contentsFragment = document.createDocumentFragment();
 
-    Array.from(row.children).forEach((cell) => (cell._vacant = true));
+    Array.from(row.children).forEach((cell) => {
+      cell._vacant = true;
+    });
     row.innerHTML = '';
-    if (row.id !== 'sizer') {
-      row.hidden = true;
-    }
+
     columns
       .filter((column) => !column.hidden)
       .forEach((column, index, cols) => {
@@ -607,7 +734,7 @@ class GridElement extends ElementMixin(
           cell.setAttribute('part', 'cell body-cell');
           row.appendChild(cell);
 
-          if (index === cols.length - 1 && (this._rowDetailsTemplate || this.rowDetailsRenderer)) {
+          if (index === cols.length - 1 && this.rowDetailsRenderer) {
             // Add details cell as last cell to body rows
             this._detailsCells = this._detailsCells || [];
             const detailsCell = this._detailsCells.filter((cell) => cell._vacant)[0] || this._createCell('td');
@@ -677,9 +804,9 @@ class GridElement extends ElementMixin(
         return false;
       }
       if (row.parentElement === this.$.header) {
-        if (column.headerRenderer || column._headerTemplate) {
+        if (column.headerRenderer) {
           // The cell is the header cell of a column that has a header renderer
-          // or a header template -> row should be visible
+          // -> row should be visible
           return true;
         }
         if (column.header === null) {
@@ -691,19 +818,20 @@ class GridElement extends ElementMixin(
           // -> row should be visible
           return true;
         }
-      } else {
-        if (column.footerRenderer || column._footerTemplate) {
-          // The cell is the footer cell of a column that has a footer renderer
-          // or a footer template -> row should be visible
-          return true;
-        }
+      } else if (column.footerRenderer) {
+        // The cell is the footer cell of a column that has a footer renderer
+        // -> row should be visible
+        return true;
       }
+      return false;
     });
 
     if (row.hidden !== !visibleRowCells.length) {
       row.hidden = !visibleRowCells.length;
-      this.notifyResize();
     }
+
+    // Make sure the section has a tabbable element
+    this._resetKeyboardNavigation();
   }
 
   /** @private */
@@ -714,8 +842,9 @@ class GridElement extends ElementMixin(
       return;
     }
 
-    this._toggleAttribute('first', index === 0, row);
-    this._toggleAttribute('odd', index % 2, row);
+    row.toggleAttribute('first', index === 0);
+    row.toggleAttribute('last', index === this._effectiveSize - 1);
+    row.toggleAttribute('odd', index % 2);
     this._a11yUpdateRowRowindex(row, index);
     this._getItem(index, row);
   }
@@ -727,23 +856,25 @@ class GridElement extends ElementMixin(
   }
 
   /**
-   * @param {!Array<!GridColumnElement>} columnTree
+   * @param {!Array<!GridColumn>} columnTree
    * @protected
    */
   _renderColumnTree(columnTree) {
     Array.from(this.$.items.children).forEach((row) =>
-      this._updateRow(row, columnTree[columnTree.length - 1], null, false, true)
+      this._updateRow(row, columnTree[columnTree.length - 1], null, false, true),
     );
 
     while (this.$.header.children.length < columnTree.length) {
       const headerRow = document.createElement('tr');
       headerRow.setAttribute('part', 'row');
       headerRow.setAttribute('role', 'row');
+      headerRow.setAttribute('tabindex', '-1');
       this.$.header.appendChild(headerRow);
 
       const footerRow = document.createElement('tr');
       footerRow.setAttribute('part', 'row');
       footerRow.setAttribute('role', 'row');
+      footerRow.setAttribute('tabindex', '-1');
       this.$.footer.appendChild(footerRow);
     }
     while (this.$.header.children.length > columnTree.length) {
@@ -752,11 +883,11 @@ class GridElement extends ElementMixin(
     }
 
     Array.from(this.$.header.children).forEach((headerRow, index) =>
-      this._updateRow(headerRow, columnTree[index], 'header', index === columnTree.length - 1)
+      this._updateRow(headerRow, columnTree[index], 'header', index === columnTree.length - 1),
     );
 
     Array.from(this.$.footer.children).forEach((footerRow, index) =>
-      this._updateRow(footerRow, columnTree[columnTree.length - 1 - index], 'footer', index === 0)
+      this._updateRow(footerRow, columnTree[columnTree.length - 1 - index], 'footer', index === 0),
     );
 
     // Sizer rows
@@ -769,27 +900,17 @@ class GridElement extends ElementMixin(
     this._a11yUpdateHeaderRows();
     this._a11yUpdateFooterRows();
     this.__updateFooterPositioning();
+    this.generateCellClassNames();
   }
 
   __updateFooterPositioning() {
-    if (this._firefox) {
+    // TODO: fixed in Firefox 99, remove when we can drop Firefox ESR 91 support
+    if (this._firefox && parseFloat(navigator.userAgent.match(/Firefox\/(\d{2,3}.\d)/)[1]) < 99) {
       // Sticky (or translated) footer in a flexbox host doesn't get included in
       // the scroll height calculation on FF. This is a workaround for the issue.
       this.$.items.style.paddingBottom = 0;
-      if (!this.heightByRows) {
+      if (!this.allRowsVisible) {
         this.$.items.style.paddingBottom = `${this.$.footer.offsetHeight}px`;
-      }
-    }
-
-    if (this._ios) {
-      const isOldIOS = !window.CSS.supports('position', 'sticky');
-      if (isOldIOS) {
-        // Due to a rendering bug, the sticky header may disappear on an older iOS (10-12) Safari
-        // if the grid is used inside of a flex box. This is a workaround for the issue.
-        this.$.table.style.height = '';
-        this.$.table.style.minHeight = '100%';
-        this.$.table.style.maxHeight = '100%';
-        setTimeout(() => (this.$.table.style.height = `${this.$.scroller.offsetHeight}px`));
       }
     }
   }
@@ -803,14 +924,15 @@ class GridElement extends ElementMixin(
     row._item = item;
     const model = this.__getRowModel(row);
 
-    this._toggleAttribute('selected', model.selected, row);
-    this._a11yUpdateRowSelected(row, model.selected);
+    this._toggleDetailsCell(row, model.detailsOpened);
+
     this._a11yUpdateRowLevel(row, model.level);
-    this._toggleAttribute('expanded', model.expanded, row);
-    this._toggleAttribute('details-opened', this._isDetailsOpened(item), row);
-    if (this._rowDetailsTemplate || this.rowDetailsRenderer) {
-      this._toggleDetailsCell(row, item);
-    }
+    this._a11yUpdateRowSelected(row, model.selected);
+
+    row.toggleAttribute('expanded', model.expanded);
+    row.toggleAttribute('selected', model.selected);
+    row.toggleAttribute('details-opened', model.detailsOpened);
+
     this._generateCellClassNames(row, model);
     this._filterDragAndDrop(row, model);
 
@@ -818,60 +940,31 @@ class GridElement extends ElementMixin(
       if (cell._renderer) {
         const owner = cell._column || this;
         cell._renderer.call(owner, cell._content, owner, model);
-      } else if (cell._instance) {
-        cell._instance.__detailsOpened__ = model.detailsOpened;
-        cell._instance.__selected__ = model.selected;
-        cell._instance.__level__ = model.level;
-        cell._instance.__expanded__ = model.expanded;
-        cell._instance.setProperties(model);
       }
     });
 
-    this._debouncerUpdateHeights = Debouncer.debounce(this._debouncerUpdateHeights, timeOut.after(1), () => {
-      this._updateMetrics();
-      this._positionItems();
-      this._updateScrollerSize();
-    });
+    this._updateDetailsCellHeight(row);
+
+    this._a11yUpdateRowExpanded(row, model.expanded);
   }
 
   /** @private */
   _resizeHandler() {
     this._updateDetailsCellHeights();
-    this._accessIronListAPI(super._resizeHandler, true);
-    this._updateScrollerMeasurements();
     this.__updateFooterPositioning();
+    this.__updateHorizontalScrollPosition();
   }
 
   /** @private */
   _onAnimationEnd(e) {
     // ShadyCSS applies scoping suffixes to animation names
     if (e.animationName.indexOf('vaadin-grid-appear') === 0) {
-      this._render();
       e.stopPropagation();
-      this.notifyResize();
       this.__itemsReceived();
 
       requestAnimationFrame(() => {
         this.__scrollToPendingIndex();
-        // This needs to be set programmatically in order to avoid an iOS 10 bug (disappearing grid)
-        this.$.table.style.webkitOverflowScrolling = 'touch';
       });
-    }
-  }
-
-  /**
-   * @param {string} name
-   * @param {boolean} bool
-   * @param {!Element} node
-   * @protected
-   */
-  _toggleAttribute(name, bool, node) {
-    if (node.hasAttribute(name) === !bool) {
-      if (bool) {
-        node.setAttribute(name, '');
-      } else {
-        node.removeAttribute(name);
-      }
     }
   }
 
@@ -887,23 +980,41 @@ class GridElement extends ElementMixin(
       level: this._getIndexLevel(row.index),
       expanded: this._isExpanded(row._item),
       selected: this._isSelected(row._item),
-      detailsOpened: !!(this._rowDetailsTemplate || this.rowDetailsRenderer) && this._isDetailsOpened(row._item)
+      detailsOpened: !!this.rowDetailsRenderer && this._isDetailsOpened(row._item),
     };
   }
 
   /**
-   * Manually invoke existing renderers for all the columns
-   * (header, footer and body cells) and opened row details.
+   * Requests an update for the content of cells.
+   *
+   * While performing the update, the following renderers are invoked:
+   * - `Grid.rowDetailsRenderer`
+   * - `GridColumn.renderer`
+   * - `GridColumn.headerRenderer`
+   * - `GridColumn.footerRenderer`
+   *
+   * It is not guaranteed that the update happens immediately (synchronously) after it is requested.
    */
-  render() {
+  requestContentUpdate() {
     if (this._columnTree) {
-      // header and footer renderers
+      // Header and footer renderers
       this._columnTree.forEach((level) => {
-        level.forEach((column) => column._renderHeaderAndFooter());
+        level.forEach((column) => {
+          if (column._renderHeaderAndFooter) {
+            column._renderHeaderAndFooter();
+          }
+        });
       });
 
-      // body and row details renderers
-      this._update();
+      // Body and row details renderers
+      this.__updateVisibleRows();
+    }
+  }
+
+  /** @protected */
+  __updateVisibleRows(start, end) {
+    if (this.__virtualizer) {
+      this.__virtualizer.update(start, end);
     }
   }
 
@@ -912,27 +1023,17 @@ class GridElement extends ElementMixin(
    * (row/details cell positioning etc). Needs to be invoked whenever the sizing of grid
    * content changes asynchronously to ensure consistent appearance (e.g. when a
    * contained image whose bounds aren't known beforehand finishes loading).
+   *
+   * @deprecated Since Vaadin 22, `notifyResize()` is deprecated. The component uses a
+   * ResizeObserver internally and doesn't need to be explicitly notified of resizes.
    */
   notifyResize() {
-    super.notifyResize();
-  }
-
-  /** @private */
-  _heightByRowsChanged(value, oldValue) {
-    if (value || oldValue) {
-      this.notifyResize();
-    }
-  }
-
-  /** @protected */
-  __forceReflow() {
-    this._debouncerForceReflow = Debouncer.debounce(this._debouncerForceReflow, animationFrame, () => {
-      this.$.scroller.style.overflow = 'hidden';
-      setTimeout(() => (this.$.scroller.style.overflow = ''));
-    });
+    console.warn(
+      `WARNING: Since Vaadin 22, notifyResize() is deprecated. The component uses a ResizeObserver internally and doesn't need to be explicitly notified of resizes.`,
+    );
   }
 }
 
-customElements.define(GridElement.is, GridElement);
+customElements.define(Grid.is, Grid);
 
-export { GridElement };
+export { Grid };

@@ -1,8 +1,10 @@
 import { expect } from '@esm-bundle/chai';
+import { fixtureSync, nextRender } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { flush } from '@polymer/polymer/lib/utils/flush.js';
-import { fixtureSync } from '@open-wc/testing-helpers';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
+import '../vaadin-grid.js';
 import '../vaadin-grid-column-group.js';
+import { flushGrid, getContainerCell } from './helpers.js';
 
 describe('column group', () => {
   let group, columns;
@@ -57,7 +59,7 @@ describe('column group', () => {
     expect(group.frozen).to.be.true;
   });
 
-  // this test is aimed for Safari 9, see #552
+  // This test is aimed for Safari 9, see #552
   it('should propagate frozen from children when attached', () => {
     const parent = group.parentElement;
     parent.removeChild(group);
@@ -65,7 +67,6 @@ describe('column group', () => {
     columns[0].frozen = true;
 
     parent.appendChild(group);
-    flush();
 
     expect(group.frozen).to.be.true;
   });
@@ -78,21 +79,21 @@ describe('column group', () => {
     expect(columns[1].frozen).to.be.true;
   });
 
-  it('should hide group column', () => {
+  it('should hide when all columns are hidden', () => {
     columns[0].hidden = true;
     columns[1].hidden = true;
 
     expect(group.hidden).to.be.true;
   });
 
-  it('should unhide group column', () => {
+  it('should unhide when making child column visible', () => {
     group.hidden = true;
     columns[0].hidden = false;
 
     expect(group.hidden).to.be.false;
   });
 
-  it('should not unhide other columns', () => {
+  it('should not unhide other columns when making a column visible', () => {
     group.hidden = true;
     columns[0].hidden = false;
 
@@ -106,10 +107,7 @@ describe('column group', () => {
     expect(columns[0].hidden).to.be.true;
     expect(columns[1].hidden).to.be.true;
     expect(group.hidden).to.be.true;
-  });
 
-  it('should propagate hidden to child columns 2', () => {
-    group.hidden = true;
     group.hidden = false;
 
     expect(columns[0].hidden).to.be.false;
@@ -117,16 +115,15 @@ describe('column group', () => {
     expect(group.hidden).to.be.false;
   });
 
-  it('should hide the group', () => {
+  it('should hide when removing all child columns', () => {
     group.removeChild(columns[0]);
     group.removeChild(columns[1]);
-    flush();
     group._observer.flush();
 
     expect(group.hidden).to.be.true;
   });
 
-  it('should unhide the group', () => {
+  it('should unhide when adding a visible column', () => {
     group.removeChild(columns[0]);
     group.removeChild(columns[1]);
     group._observer.flush();
@@ -137,7 +134,7 @@ describe('column group', () => {
     expect(group.hidden).to.be.false;
   });
 
-  it('should not unhide the group', () => {
+  it('should not unhide when adding a hidden column', () => {
     group.removeChild(columns[0]);
     group.removeChild(columns[1]);
     group._observer.flush();
@@ -147,6 +144,21 @@ describe('column group', () => {
     group._observer.flush();
 
     expect(group.hidden).to.be.true;
+  });
+
+  // Regression test for https://github.com/vaadin/flow-components/issues/2959
+  it('should not unhide columns when attached to DOM', () => {
+    const group = document.createElement('vaadin-grid-column-group');
+    const visibleColumn = document.createElement('vaadin-grid-column');
+    const hiddenColumn = document.createElement('vaadin-grid-column');
+    hiddenColumn.hidden = true;
+
+    group.appendChild(visibleColumn);
+    group.appendChild(hiddenColumn);
+    document.body.appendChild(group);
+    group._observer.flush();
+
+    expect(hiddenColumn.hidden).to.be.true;
   });
 
   it('should calculate column group width after hiding a column', () => {
@@ -162,26 +174,65 @@ describe('column group', () => {
   });
 
   describe('dom observing', () => {
-    it('should pickup header template', () => {
-      const group = document.createElement('vaadin-grid-column-group');
-      const template = document.createElement('template');
-      template.classList.add('header');
+    let grid, column;
 
-      group.appendChild(template);
-      group._templateObserver.flush();
+    beforeEach(() => {
+      grid = fixtureSync(`
+        <vaadin-grid>
+          <vaadin-grid-column-group>
+            <vaadin-grid-column></vaadin-grid-column>
+          </vaadin-grid-column-group>
+        </vaadin-grid>
+      `);
 
-      expect(group._headerTemplate).to.eql(template);
+      grid.items = ['item1', 'item2'];
+      column = grid.firstElementChild;
+
+      flushGrid(grid);
     });
 
-    it('should pickup footer template', () => {
-      const group = document.createElement('vaadin-grid-column-group');
-      const template = document.createElement('template');
-      template.classList.add('footer');
+    ['header', 'footer'].forEach((templateName) => {
+      let cell;
 
-      group.appendChild(template);
-      group._templateObserver.flush();
+      beforeEach(() => {
+        if (templateName === 'header') {
+          cell = getContainerCell(grid.$.header, 0, 0);
+        }
+        if (templateName === 'footer') {
+          cell = getContainerCell(grid.$.footer, 1, 0);
+        }
+      });
 
-      expect(group._footerTemplate).to.eql(template);
+      it(`should observe for adding ${templateName} templates`, async () => {
+        const template = fixtureSync(`
+          <template class="${templateName}">content</template>
+        `);
+
+        column.appendChild(template);
+        await nextRender();
+
+        expect(cell._content.textContent).to.equal('content');
+      });
+
+      it(`should observe for replacing ${templateName} templates`, async () => {
+        const template1 = fixtureSync(`
+          <template class="${templateName}">content1</template>
+        `);
+        const template2 = fixtureSync(`
+          <template class="${templateName}">content2</template>
+        `);
+
+        column.appendChild(template1);
+        await nextRender();
+
+        expect(cell._content.textContent).to.equal('content1');
+
+        column.removeChild(template1);
+        column.appendChild(template2);
+        await nextRender();
+
+        expect(cell._content.textContent).to.equal('content2');
+      });
     });
   });
 

@@ -1,8 +1,9 @@
 import { expect } from '@esm-bundle/chai';
-import { fixtureSync } from '@open-wc/testing-helpers';
-import { click, flushGrid, getContainerCell } from './helpers.js';
+import { click, fixtureSync } from '@vaadin/testing-helpers';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
 import '../vaadin-grid.js';
 import '../vaadin-grid-column-group.js';
+import { flushGrid, getContainerCell } from './helpers.js';
 
 describe('event context', () => {
   let grid, column, columnGroup;
@@ -48,15 +49,15 @@ describe('event context', () => {
       cell,
       {
         item: { foo: 'bar' },
-        column: column,
+        column,
         section: 'body',
         index: 0,
         selected: false,
         detailsOpened: true,
         expanded: false,
-        level: 0
+        level: 0,
       },
-      done
+      done,
     );
   });
 
@@ -65,10 +66,10 @@ describe('event context', () => {
     testEventContext(
       headerCell,
       {
-        column: column,
-        section: 'header'
+        column,
+        section: 'header',
       },
-      done
+      done,
     );
   });
 
@@ -77,10 +78,10 @@ describe('event context', () => {
     testEventContext(
       footerCell,
       {
-        column: column,
-        section: 'footer'
+        column,
+        section: 'footer',
       },
-      done
+      done,
     );
   });
 
@@ -90,9 +91,9 @@ describe('event context', () => {
       columnGroupHeader,
       {
         column: columnGroup,
-        section: 'header'
+        section: 'header',
       },
-      done
+      done,
     );
   });
 
@@ -102,9 +103,9 @@ describe('event context', () => {
       columnGroupFooter,
       {
         column: columnGroup,
-        section: 'footer'
+        section: 'footer',
       },
-      done
+      done,
     );
   });
 
@@ -119,9 +120,9 @@ describe('event context', () => {
         selected: false,
         detailsOpened: true,
         expanded: false,
-        level: 0
+        level: 0,
       },
-      done
+      done,
     );
   });
 
@@ -131,5 +132,21 @@ describe('event context', () => {
 
   it('should return empty object when targeting grid element', (done) => {
     testEventContext(grid, {}, done);
+  });
+
+  it('should use composedPath() stored on the event', (done) => {
+    grid.addEventListener('click', (e) => {
+      // Emulate the context-menu gesture
+      e.__composedPath = e.composedPath();
+
+      setTimeout(() => {
+        const context = grid.getEventContext(e);
+        expect(context.column).to.deep.equal(column);
+        done();
+      });
+    });
+
+    const cell = getContainerCell(grid.$.items, 0, 0);
+    click(cell);
   });
 });

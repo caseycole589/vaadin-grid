@@ -1,28 +1,20 @@
-import { GridItem } from './interfaces';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { Constructor } from '@open-wc/dedupe-mixin';
 
-declare function ActiveItemMixin<T extends new (...args: any[]) => {}>(base: T): T & ActiveItemMixinConstructor;
+export declare function ActiveItemMixin<TItem, T extends Constructor<HTMLElement>>(
+  base: T,
+): Constructor<ActiveItemMixinClass<TItem>> & T;
 
-interface ActiveItemMixinConstructor {
-  new (...args: any[]): ActiveItemMixin;
-}
-
-interface ActiveItemMixin {
+export declare class ActiveItemMixinClass<TItem> {
   /**
    * The item user has last interacted with. Turns to `null` after user deactivates
    * the item by re-interacting with the currently active item.
    */
-  activeItem: GridItem | null;
-
-  /**
-   * We need to listen to click instead of tap because on mobile safari, the
-   * document.activeElement has not been updated (focus has not been shifted)
-   * yet at the point when tap event is being executed.
-   */
-  _onClick(e: MouseEvent): void;
-
-  _isFocusable(target: Element): boolean;
+  activeItem: TItem | null;
 }
 
-declare function isFocusable(target: Element): boolean;
-
-export { ActiveItemMixin, ActiveItemMixinConstructor, isFocusable };
+export declare function isFocusable(target: Element): boolean;

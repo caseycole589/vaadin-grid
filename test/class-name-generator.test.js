@@ -1,8 +1,8 @@
 import { expect } from '@esm-bundle/chai';
+import { fixtureSync, nextFrame } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { fixtureSync, nextFrame } from '@open-wc/testing-helpers';
-import { flushGrid, getContainerCell, getRows, infiniteDataProvider, scrollToEnd } from './helpers.js';
 import '../vaadin-grid.js';
+import { flushGrid, getContainerCell, getRows, infiniteDataProvider, scrollToEnd } from './helpers.js';
 
 describe('class name generator', () => {
   let grid, firstCell, initialCellClasses;
@@ -50,19 +50,20 @@ describe('class name generator', () => {
   });
 
   it('should provide column and model as parameters', () => {
-    grid.cellClassNameGenerator = (column, model) => model.index + ' ' + model.item.value + ' ' + column.header;
+    grid.cellClassNameGenerator = (column, model) => `${model.index} ${model.item.value} ${column.header}`;
     assertClassList(getContainerCell(grid.$.items, 5, 1), ['5', 'foo5', 'col1']);
     assertClassList(getContainerCell(grid.$.items, 10, 0), ['10', 'foo10', 'col0']);
   });
 
   it('should be called for details cell with undefined column', async () => {
     grid.rowDetailsRenderer = () => {};
-    grid.cellClassNameGenerator = (column, model) => model.index + ' ' + column;
+    grid.cellClassNameGenerator = (column, model) => `${model.index} ${column}`;
     await nextFrame();
+    flushGrid(grid);
     assertClassList(getContainerCell(grid.$.items, 0, 2), ['0', 'undefined']);
   });
 
-  it('should add classes when loading new items', function (done) {
+  it('should add classes when loading new items', (done) => {
     grid.cellClassNameGenerator = (column, model) => model.item.value;
     scrollToEnd(grid, () => {
       const rows = getRows(grid.$.items);
@@ -74,7 +75,9 @@ describe('class name generator', () => {
   });
 
   it('should not throw with falsy return value', () => {
-    expect(() => (grid.cellClassNameGenerator = () => {})).not.to.throw(Error);
+    expect(() => {
+      grid.cellClassNameGenerator = () => {};
+    }).not.to.throw(Error);
   });
 
   it('should clear generated classes with falsy return value', () => {
@@ -89,7 +92,7 @@ describe('class name generator', () => {
     assertClassList(firstCell, []);
   });
 
-  ['generateCellClassNames', 'clearCache', 'render'].forEach((funcName) => {
+  ['generateCellClassNames', 'clearCache', 'requestContentUpdate'].forEach((funcName) => {
     it(`should update classes on ${funcName}`, () => {
       let condition = false;
       grid.cellClassNameGenerator = () => condition && 'foo';
@@ -110,7 +113,51 @@ describe('class name generator', () => {
   });
 
   it('should not throw with extra whitespace in the result', () => {
-    expect(() => (grid.cellClassNameGenerator = () => ' foo  bar ')).not.to.throw(Error);
+    expect(() => {
+      grid.cellClassNameGenerator = () => ' foo  bar ';
+    }).not.to.throw(Error);
     assertClassList(firstCell, ['foo', 'bar']);
+  });
+
+  it('should have the right class names after toggling column visibility', async () => {
+    grid.cellClassNameGenerator = (_column, { index }) => (index % 2 === 0 ? 'even' : 'odd');
+    const column = grid.querySelector('vaadin-grid-column');
+    column.hidden = true;
+    await nextFrame();
+    column.hidden = false;
+    await nextFrame();
+    assertClassList(getContainerCell(grid.$.items, 1, 0), ['odd']);
+    assertClassList(getContainerCell(grid.$.items, 1, 1), ['odd']);
+  });
+
+  describe('async data provider', () => {
+    let clock;
+
+    beforeEach(() => {
+      clock = sinon.useFakeTimers({
+        shouldClearNativeTimers: true,
+      });
+
+      grid.dataProvider = (params, callback) => {
+        setTimeout(() => infiniteDataProvider(params, callback), 10);
+      };
+    });
+
+    afterEach(() => {
+      clock.restore();
+    });
+
+    it('should only run the generator for the rows that are loaded', () => {
+      const spy = sinon.spy();
+      grid.cellClassNameGenerator = spy;
+      spy.resetHistory();
+
+      grid.generateCellClassNames();
+      expect(spy.called).to.be.false;
+
+      clock.tick(10);
+      grid.generateCellClassNames();
+      expect(spy.called).to.be.true;
+    });
   });
 });

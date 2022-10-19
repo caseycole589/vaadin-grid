@@ -1,11 +1,11 @@
-import { registerStyles, css } from '@vaadin/vaadin-themable-mixin/register-styles.js';
 import '@vaadin/vaadin-lumo-styles/color.js';
 import '@vaadin/vaadin-lumo-styles/font-icons.js';
 import '@vaadin/vaadin-lumo-styles/sizing.js';
 import '@vaadin/vaadin-lumo-styles/spacing.js';
 import '@vaadin/vaadin-lumo-styles/style.js';
 import '@vaadin/vaadin-lumo-styles/typography.js';
-import '@vaadin/vaadin-checkbox/theme/lumo/vaadin-checkbox.js';
+import '@vaadin/checkbox/theme/lumo/vaadin-checkbox.js';
+import { css, registerStyles } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
 
 registerStyles(
   'vaadin-grid',
@@ -35,6 +35,10 @@ registerStyles(
       border: var(--_lumo-grid-border-width) solid var(--_lumo-grid-border-color);
     }
 
+    :host([disabled]) {
+      opacity: 0.7;
+    }
+
     /* Cell styles */
 
     [part~='cell'] {
@@ -60,10 +64,16 @@ registerStyles(
 
     /* Focus-ring */
 
+    [part~='row'] {
+      position: relative;
+    }
+
+    [part~='row']:focus,
     [part~='cell']:focus {
       outline: none;
     }
 
+    :host([navigating]) [part~='row']:focus::before,
     :host([navigating]) [part~='cell']:focus::before {
       content: '';
       position: absolute;
@@ -73,6 +83,11 @@ registerStyles(
       left: 0;
       pointer-events: none;
       box-shadow: inset 0 0 0 2px var(--lumo-primary-color-50pct);
+    }
+
+    :host([navigating]) [part~='row']:focus::before {
+      transform: translateX(calc(-1 * var(--_grid-horizontal-scroll-position)));
+      z-index: 3;
     }
 
     /* Drag and Drop styles */
@@ -108,6 +123,10 @@ registerStyles(
       background: var(--lumo-primary-color-50pct);
     }
 
+    [part~='row'][dragover] [part~='cell'][last-frozen]::after {
+      right: -1px;
+    }
+
     :host([theme~='no-row-borders']) [dragover] [part~='cell']::after {
       height: 2px;
     }
@@ -116,6 +135,10 @@ registerStyles(
       top: 100%;
       bottom: auto;
       margin-top: -1px;
+    }
+
+    :host([all-rows-visible]) [part~='row'][last][dragover='below'] [part~='cell']::after {
+      height: 1px;
     }
 
     [part~='row'][dragover='above'] [part~='cell']::after {
@@ -131,13 +154,7 @@ registerStyles(
 
     [part~='row'][dragover][dragover='on-top'] [part~='cell']::after {
       height: 100%;
-    }
-
-    [part~='row'][dragstart] {
-      /* Add bottom-space to the row so the drag number doesn't get clipped. Needed for IE/Edge */
-      border-bottom: 100px solid transparent;
-      z-index: 100 !important;
-      opacity: 0.9;
+      opacity: 0.5;
     }
 
     [part~='row'][dragstart] [part~='cell'] {
@@ -153,11 +170,7 @@ registerStyles(
       border-radius: var(--lumo-border-radius-s) 0 0 var(--lumo-border-radius-s);
     }
 
-    [ios] [part~='row'][dragstart] [part~='cell'] {
-      background: var(--lumo-primary-color-50pct);
-    }
-
-    #scroller:not([ios]) [part~='row'][dragstart]:not([dragstart=''])::after {
+    #scroller [part~='row'][dragstart]:not([dragstart=''])::after {
       display: block;
       position: absolute;
       left: var(--_grid-drag-start-x);
@@ -282,8 +295,16 @@ registerStyles(
       overflow: hidden;
     }
 
-    :host([overflow~='left']) [part~='cell'][last-frozen]:not([part~='details-cell']) {
+    :host([overflow~='start']) [part~='cell'][last-frozen]:not([part~='details-cell']) {
       border-right-color: var(--_lumo-grid-border-color);
+    }
+
+    [first-frozen-to-end] {
+      border-left: var(--_lumo-grid-border-width) solid transparent;
+    }
+
+    :host([overflow~='end']) [part~='cell'][first-frozen-to-end]:not([part~='details-cell']) {
+      border-left-color: var(--_lumo-grid-border-color);
     }
 
     /* Row stripes */
@@ -355,19 +376,18 @@ registerStyles(
       border-left: var(--_lumo-grid-border-width) solid transparent;
     }
 
-    :host([dir='rtl'][overflow~='right']) [part~='cell'][last-frozen]:not([part~='details-cell']) {
+    :host([dir='rtl']) [first-frozen-to-end] {
+      border-left: none;
+      border-right: var(--_lumo-grid-border-width) solid transparent;
+    }
+
+    :host([dir='rtl'][overflow~='start']) [part~='cell'][last-frozen]:not([part~='details-cell']) {
       border-left-color: var(--_lumo-grid-border-color);
     }
-  `,
-  { moduleId: 'lumo-grid' }
-);
 
-registerStyles(
-  'vaadin-checkbox',
-  css`
-    :host(.vaadin-grid-select-all-checkbox) {
-      font-size: var(--lumo-font-size-m);
+    :host([dir='rtl'][overflow~='end']) [part~='cell'][first-frozen-to-end]:not([part~='details-cell']) {
+      border-right-color: var(--_lumo-grid-border-color);
     }
   `,
-  { moduleId: 'vaadin-grid-select-all-checkbox-lumo' }
+  { moduleId: 'lumo-grid' },
 );

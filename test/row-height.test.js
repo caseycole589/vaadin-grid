@@ -1,8 +1,9 @@
 import { expect } from '@esm-bundle/chai';
-import { aTimeout, fixtureSync, nextFrame, oneEvent } from '@open-wc/testing-helpers';
-import { registerStyles, css } from '@vaadin/vaadin-themable-mixin/register-styles.js';
-import { flushGrid, getRows, getRowCells, infiniteDataProvider, scrollToEnd } from './helpers.js';
+import { aTimeout, fixtureSync, nextFrame, oneEvent } from '@vaadin/testing-helpers';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
 import '../vaadin-grid.js';
+import { css, registerStyles } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
+import { flushGrid, getRowCells, getRows, infiniteDataProvider, scrollToEnd } from './helpers.js';
 
 registerStyles(
   'vaadin-grid',
@@ -10,7 +11,7 @@ registerStyles(
     [part~='cell'] {
       border: none !important;
     }
-  `
+  `,
 );
 
 const fixtures = {
@@ -50,7 +51,7 @@ const fixtures = {
         <template class="header">foo</template>
       </vaadin-grid-column>
     </vaadin-grid>
-  `
+  `,
 };
 
 describe('rows', () => {
@@ -76,7 +77,7 @@ describe('rows', () => {
 
   it('should have higher cells on each row', async () => {
     await init('twoColumns');
-    cells[0].style.height = cells[0].clientHeight * 2 + 'px';
+    cells[0].style.height = `${cells[0].clientHeight * 2}px`;
     await nextFrame();
     expect(cells[1].clientHeight).to.equal(cells[0].clientHeight);
   });
@@ -104,7 +105,9 @@ describe('rows', () => {
 
     const parentNode = grid.parentNode;
     parentNode.removeChild(grid);
-    parentNode.offsetHeight;
+    // Force layout / reflow
+    // https://gist.github.com/paulirish/5d52fb081b3570c81e3a#setting-focus
+    parentNode.focus();
     parentNode.appendChild(grid);
 
     await aTimeout(0);

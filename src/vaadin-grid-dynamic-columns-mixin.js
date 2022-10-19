@@ -1,18 +1,46 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
-import { PolymerElement } from '@polymer/polymer/polymer-element.js';
 import { FlattenedNodesObserver } from '@polymer/polymer/lib/utils/flattened-nodes-observer.js';
-import { Debouncer } from '@polymer/polymer/lib/utils/debounce.js';
-import { timeOut } from '@polymer/polymer/lib/utils/async.js';
+import { PolymerElement } from '@polymer/polymer/polymer-element.js';
+import { timeOut } from '@vaadin/component-base/src/async.js';
+import { Debouncer } from '@vaadin/component-base/src/debounce.js';
+
+function arrayEquals(arr1, arr2) {
+  if (!arr1 || !arr2 || arr1.length !== arr2.length) {
+    return false;
+  }
+
+  for (let i = 0, l = arr1.length; i < l; i++) {
+    // Check if we have nested arrays
+    if (arr1[i] instanceof Array && arr2[i] instanceof Array) {
+      // Recurse into the nested arrays
+      if (!arrayEquals(arr1[i], arr2[i])) {
+        return false;
+      }
+    } else if (arr1[i] !== arr2[i]) {
+      return false;
+    }
+  }
+  return true;
+}
 
 /**
  * @polymerMixin
  */
 export const DynamicColumnsMixin = (superClass) =>
   class DynamicColumnsMixin extends superClass {
+    static get properties() {
+      return {
+        /**
+         * @protected
+         */
+        _columnTree: Object,
+      };
+    }
+
     /** @protected */
     ready() {
       super.ready();
@@ -31,8 +59,8 @@ export const DynamicColumnsMixin = (superClass) =>
     }
 
     /**
-     * @param {!GridColumnGroupElement} el
-     * @return {!Array<!GridColumnElement>}
+     * @param {!GridColumnGroup} el
+     * @return {!Array<!GridColumn>}
      * @protected
      */
     _getChildColumns(el) {
@@ -45,9 +73,8 @@ export const DynamicColumnsMixin = (superClass) =>
         .map((col) => {
           if (col.localName === 'vaadin-grid-column-group') {
             return this._getChildColumns(col);
-          } else {
-            return [col];
           }
+          return [col];
         })
         .reduce((prev, curr) => {
           return prev.concat(curr);
@@ -57,14 +84,12 @@ export const DynamicColumnsMixin = (superClass) =>
     /** @private */
     _getColumnTree() {
       const rootColumns = FlattenedNodesObserver.getFlattenedNodes(this).filter(this._isColumnElement);
-      const columnTree = [];
+      const columnTree = [rootColumns];
 
-      for (let c = rootColumns; ; ) {
-        columnTree.push(c);
-        if (!this._hasColumnGroups(c)) {
-          break;
-        }
+      let c = rootColumns;
+      while (this._hasColumnGroups(c)) {
         c = this._flattenColumnGroups(c);
+        columnTree.push(c);
       }
 
       return columnTree;
@@ -73,7 +98,7 @@ export const DynamicColumnsMixin = (superClass) =>
     /** @protected */
     _updateColumnTree() {
       const columnTree = this._getColumnTree();
-      if (!this._arrayEquals(columnTree, this._columnTree)) {
+      if (!arrayEquals(columnTree, this._columnTree)) {
         this._columnTree = columnTree;
       }
     }
@@ -81,12 +106,6 @@ export const DynamicColumnsMixin = (superClass) =>
     /** @private */
     _addNodeObserver() {
       this._observer = new FlattenedNodesObserver(this, (info) => {
-        const rowDetailsTemplate = info.addedNodes.filter(
-          (n) => n.localName === 'template' && n.classList.contains('row-details')
-        )[0];
-        if (rowDetailsTemplate && this._rowDetailsTemplate !== rowDetailsTemplate) {
-          this._rowDetailsTemplate = rowDetailsTemplate;
-        }
         const hasColumnElements = (nodeCollection) => nodeCollection.filter(this._isColumnElement).length > 0;
         if (hasColumnElements(info.addedNodes) || hasColumnElements(info.removedNodes)) {
           const allRemovedCells = info.removedNodes.flatMap((c) => c._allCells);
@@ -101,31 +120,11 @@ export const DynamicColumnsMixin = (superClass) =>
         this._debouncerCheckImports = Debouncer.debounce(
           this._debouncerCheckImports,
           timeOut.after(2000),
-          this._checkImports.bind(this)
+          this._checkImports.bind(this),
         );
 
         this._ensureFirstPageLoaded();
       });
-    }
-
-    /** @private */
-    _arrayEquals(arr1, arr2) {
-      if (!arr1 || !arr2 || arr1.length != arr2.length) {
-        return false;
-      }
-
-      for (let i = 0, l = arr1.length; i < l; i++) {
-        // Check if we have nested arrays
-        if (arr1[i] instanceof Array && arr2[i] instanceof Array) {
-          // recurse into the nested arrays
-          if (!this._arrayEquals(arr1[i], arr2[i])) {
-            return false;
-          }
-        } else if (arr1[i] != arr2[i]) {
-          return false;
-        }
-      }
-      return true;
     }
 
     /** @protected */
@@ -137,7 +136,7 @@ export const DynamicColumnsMixin = (superClass) =>
         'vaadin-grid-tree-toggle',
         'vaadin-grid-selection-column',
         'vaadin-grid-sort-column',
-        'vaadin-grid-sorter'
+        'vaadin-grid-sorter',
       ].forEach((elementName) => {
         const element = this.querySelector(elementName);
         if (element && !(element instanceof PolymerElement)) {
@@ -161,8 +160,8 @@ export const DynamicColumnsMixin = (superClass) =>
           return a._column._order - b._column._order;
         })
         .forEach((cell, cellIndex, children) => {
-          this._toggleAttribute('first-column', cellIndex === 0, cell);
-          this._toggleAttribute('last-column', cellIndex === children.length - 1, cell);
+          cell.toggleAttribute('first-column', cellIndex === 0);
+          cell.toggleAttribute('last-column', cellIndex === children.length - 1);
         });
     }
 

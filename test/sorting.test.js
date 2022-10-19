@@ -1,19 +1,11 @@
 import { expect } from '@esm-bundle/chai';
+import { click, fixtureSync, nextFrame } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { fixtureSync, nextFrame } from '@open-wc/testing-helpers';
-import {
-  buildDataSet,
-  click,
-  flushGrid,
-  getBodyCellContent,
-  getHeaderCellContent,
-  getRows,
-  getRowCells,
-  listenOnce
-} from './helpers.js';
-import '../vaadin-grid.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
 import '../vaadin-grid-sorter.js';
 import '../vaadin-grid-sort-column.js';
+import { Grid } from '../vaadin-grid.js';
+import { buildDataSet, flushGrid, getBodyCellContent, getHeaderCellContent, getRowCells, getRows } from './helpers.js';
 
 describe('sorting', () => {
   describe('sorter', () => {
@@ -48,9 +40,13 @@ describe('sorting', () => {
       expect(sorter.direction).to.equal(null);
     });
 
-    it('should fire a sorter-changed event', (done) => {
-      listenOnce(sorter, 'sorter-changed', () => done());
+    it('should fire a sorter-changed event', () => {
+      const spy = sinon.spy();
+      sorter.addEventListener('sorter-changed', spy);
+
       sorter.direction = 'asc';
+
+      expect(spy.calledOnce).to.be.true;
     });
 
     it('should show order indicator', () => {
@@ -100,7 +96,7 @@ describe('sorting', () => {
       grid.items = [
         { first: '1', second: '2', third: '3' },
         { first: '2', second: '3', third: '1' },
-        { first: '3', second: '1', third: '2' }
+        { first: '3', second: '1', third: '2' },
       ];
 
       flushGrid(grid);
@@ -155,6 +151,7 @@ describe('sorting', () => {
       expect(getBodyCellContent(grid, 0, 1).innerText).to.equal('2');
 
       parentNode.appendChild(grid);
+      flushGrid(grid);
       expect(getBodyCellContent(grid, 0, 1).innerText).to.equal('1');
     });
   });
@@ -191,15 +188,10 @@ describe('sorting', () => {
       grid.items = [
         { first: 'foo', last: 'bar' },
         { first: 'foo', last: 'baz' },
-        { first: 'bar', last: 'bar' }
+        { first: 'bar', last: 'bar' },
       ];
 
       flushGrid(grid);
-    });
-
-    it('should be clickable', () => {
-      const title = sorterFirst.querySelector('.title');
-      expect(window.getComputedStyle(title).cursor).to.equal('pointer');
     });
 
     it('should ignore sorter', () => {
@@ -252,14 +244,14 @@ describe('sorting', () => {
         grid.items = buildDataSet(100);
         const bodyRows = getRows(grid.$.items);
         const cells = getRowCells(bodyRows[0]);
-        expect(cells[0]._instance.item).to.equal(grid.items[0]);
+        expect(cells[0]._content.__templateInstance.item).to.equal(grid.items[0]);
       });
 
       it('should sort empty values', () => {
         grid.items = [
           { first: 'foo', last: 'bar' },
           { first: '', last: '' },
-          { first: 'bar', last: 'bar' }
+          { first: 'bar', last: 'bar' },
         ];
 
         expect(getBodyCellContent(grid, 0, 0).innerText).to.equal('bar');
@@ -271,7 +263,7 @@ describe('sorting', () => {
         grid.items = [
           { first: 'foo', last: 'bar' },
           { first: null, last: null },
-          { first: 'bar', last: 'bar' }
+          { first: 'bar', last: 'bar' },
         ];
 
         expect(getBodyCellContent(grid, 0, 0).innerText).to.equal('bar');
@@ -283,7 +275,7 @@ describe('sorting', () => {
         grid.items = [
           { first: 'foo', last: 'bar' },
           { first: undefined, last: undefined },
-          { first: 'bar', last: 'bar' }
+          { first: 'bar', last: 'bar' },
         ];
 
         expect(getBodyCellContent(grid, 0, 0).innerText).to.equal('bar');
@@ -295,7 +287,7 @@ describe('sorting', () => {
         grid.items = [
           { first: 'foo', last: 'bar' },
           { first: NaN, last: NaN },
-          { first: 'bar', last: 'bar' }
+          { first: 'bar', last: 'bar' },
         ];
 
         expect(getBodyCellContent(grid, 0, 0).innerText).to.equal('bar');
@@ -315,7 +307,7 @@ describe('sorting', () => {
         grid.items = [
           { first: 1, last: new Date(2000, 1, 2) },
           { first: 2, last: new Date(2000, 1, 3) },
-          { first: 3, last: new Date(2000, 1, 1) }
+          { first: 3, last: new Date(2000, 1, 1) },
         ];
 
         sorterFirst.direction = '';
@@ -338,7 +330,7 @@ describe('sorting', () => {
         const params = lastCall.args[0];
         expect(params.sortOrders).to.eql([
           { path: 'last', direction: 'desc' },
-          { path: 'first', direction: 'asc' }
+          { path: 'first', direction: 'asc' },
         ]);
       });
 
@@ -348,7 +340,7 @@ describe('sorting', () => {
         const params = lastCall.args[0];
         expect(params.sortOrders).to.eql([
           { path: 'first', direction: 'desc' },
-          { path: 'last', direction: 'desc' }
+          { path: 'last', direction: 'desc' },
         ]);
       });
 
@@ -356,6 +348,70 @@ describe('sorting', () => {
         grid.dataProvider.resetHistory();
         sorterLast.direction = 'asc';
         expect(grid.dataProvider.called).to.be.true;
+      });
+    });
+
+    describe('multi-sort-priority="append"', () => {
+      beforeEach(() => {
+        grid.multiSortPriority = 'append';
+      });
+
+      it('should append sort order when setting sort direction', () => {
+        sorterLast.direction = null;
+
+        sorterLast.direction = 'asc';
+        expect(sorterFirst._order).to.equal(0);
+        expect(sorterLast._order).to.equal(1);
+      });
+
+      it('should retain sort order when changing sort direction', () => {
+        sorterFirst.direction = 'desc';
+        expect(sorterFirst._order).to.equal(1);
+        expect(sorterLast._order).to.equal(0);
+      });
+
+      it('should remove sorter when clearing sort direction', () => {
+        sorterLast.direction = null;
+
+        const sortOrders = grid._mapSorters();
+        expect(sortOrders).to.have.length(1);
+        expect(sortOrders[0].path).to.equal('first');
+        expect(sortOrders[0].direction).to.equal('asc');
+      });
+
+      it('should update order when clearing sort direction', () => {
+        sorterLast.direction = null;
+
+        expect(sorterFirst._order).to.be.null;
+      });
+    });
+
+    describe('set multi-sort-priority', () => {
+      it('should change default multi-sort-priority for newly created grid', () => {
+        const grid1 = fixtureSync('<vaadin-grid></vaadin-grid>');
+        expect(grid1.multiSortPriority).to.be.equal('prepend');
+
+        Grid.setDefaultMultiSortPriority('append');
+
+        const grid2 = fixtureSync('<vaadin-grid></vaadin-grid>');
+        expect(grid1.multiSortPriority).to.be.equal('prepend');
+        expect(grid2.multiSortPriority).to.be.equal('append');
+
+        Grid.setDefaultMultiSortPriority('prepend');
+
+        const grid3 = fixtureSync('<vaadin-grid></vaadin-grid>');
+        expect(grid2.multiSortPriority).to.be.equal('append');
+        expect(grid3.multiSortPriority).to.be.equal('prepend');
+      });
+
+      it('should not change default multi-sort-priority with incorrect value', () => {
+        const grid1 = fixtureSync('<vaadin-grid></vaadin-grid>');
+        expect(grid1.multiSortPriority).to.be.equal('prepend');
+
+        Grid.setDefaultMultiSortPriority(null);
+
+        const grid2 = fixtureSync('<vaadin-grid></vaadin-grid>');
+        expect(grid2.multiSortPriority).to.be.equal('prepend');
       });
     });
 
@@ -373,7 +429,7 @@ describe('sorting', () => {
       });
 
       it('should remove order from sorters', () => {
-        // initial order before multiSort was set
+        // Initial order before multiSort was set
         expect(sorterLast._order).to.eql(0);
         expect(sorterFirst._order).to.eql(1);
 
@@ -413,29 +469,33 @@ describe('sorting', () => {
     });
 
     describe('sort-column', () => {
-      let sortColumn, sorter;
+      let sortColumn, sortCellContent, sorter;
 
       beforeEach(() => {
         sortColumn = grid.querySelector('vaadin-grid-sort-column');
-        sorter = getHeaderCellContent(grid, 0, 2).querySelector('vaadin-grid-sorter');
+        sortCellContent = getHeaderCellContent(grid, 0, 2);
+        sorter = sortCellContent.querySelector('vaadin-grid-sorter');
       });
 
-      it('should propagate path property to the internal vaadin-grid-sorter', () => {
+      it('should propagate path property to the internal grid sorter', () => {
         sortColumn.path = 'last';
         expect(sorter.path).to.equal('last');
       });
 
-      it('should propagate direction property to the internal vaadin-grid-sorter', () => {
+      it('should propagate direction property to the internal grid sorter', () => {
         sortColumn.direction = 'asc';
         expect(sorter.direction).to.equal('asc');
       });
 
-      it('should notify direction property change from the internal vaadin-grid-sorter', (done) => {
-        listenOnce(sortColumn, 'direction-changed', (e) => {
-          expect(e.detail.value).to.equal('desc');
-          done();
-        });
+      it('should fire direction-changed when changing the internal grid sorter direction', () => {
+        const spy = sinon.spy();
+        sortColumn.addEventListener('direction-changed', spy);
+
         sorter.direction = 'desc';
+
+        const event = spy.args[0][0];
+        expect(spy.calledOnce).to.be.true;
+        expect(event.detail.value).to.be.equal('desc');
       });
 
       it('should use header property to determine the text that gets slotted inside the sorter', () => {
@@ -446,6 +506,14 @@ describe('sorting', () => {
       it('should generate the text content based on path property, if header is not defined', () => {
         sortColumn.path = 'last';
         expect(sorter.textContent).to.equal('Last');
+      });
+
+      it('should ignore a custom header renderer', () => {
+        sortColumn.headerRenderer = (root) => {
+          root.innerHTML = 'header';
+        };
+
+        expect(sortCellContent.firstElementChild).to.equal(sorter);
       });
     });
   });
@@ -480,6 +548,52 @@ describe('sorting', () => {
     it('should set direction to also other than last sorter', () => {
       const sorterFirst = getHeaderCellContent(grid, 0, 0).querySelector('vaadin-grid-sorter');
       expect(sorterFirst.direction).to.eql('asc');
+    });
+  });
+
+  describe('detached sorter', () => {
+    let grid, firstName;
+
+    beforeEach(async () => {
+      grid = fixtureSync(`
+        <vaadin-grid style="width: 200px; height: 200px;" multi-sort>
+          <vaadin-grid-column path="first"></vaadin-grid-column>
+          <vaadin-grid-column path="last"></vaadin-grid-column>
+        </vaadin-grid>
+      `);
+      firstName = grid.querySelector('vaadin-grid-column');
+      firstName.headerRenderer = (root) => {
+        if (!root.firstChild) {
+          root.innerHTML = '<vaadin-grid-sorter path="first">First name</vaadin-grid-sorter>';
+        }
+      };
+      grid.items = [{ first: 'John', last: 'Doe' }];
+      flushGrid(grid);
+      await nextFrame();
+    });
+
+    it('should remove detached sorter with no parent', () => {
+      const sorterFirst = getHeaderCellContent(grid, 0, 0).querySelector('vaadin-grid-sorter');
+      sorterFirst.click();
+
+      firstName.headerRenderer = (root) => {
+        root.innerHTML = '<vaadin-grid-sorter path="first">1st</vaadin-grid-sorter>';
+      };
+      grid.requestContentUpdate();
+
+      expect(grid._sorters).to.not.contain(sorterFirst);
+    });
+
+    it('should not remove sorter for hidden column', async () => {
+      const sorterFirst = getHeaderCellContent(grid, 0, 0).querySelector('vaadin-grid-sorter');
+      sorterFirst.click();
+      firstName.setAttribute('hidden', '');
+      await nextFrame();
+
+      firstName.removeAttribute('hidden');
+      await nextFrame();
+
+      expect(grid._sorters).to.contain(sorterFirst);
     });
   });
 });

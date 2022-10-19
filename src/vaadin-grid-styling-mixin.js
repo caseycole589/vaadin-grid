@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
 
@@ -29,7 +29,7 @@ export const StylingMixin = (superClass) =>
          *
          * @type {GridCellClassNameGenerator | null | undefined}
          */
-        cellClassNameGenerator: Function
+        cellClassNameGenerator: Function,
       };
     }
 
@@ -49,7 +49,7 @@ export const StylingMixin = (superClass) =>
      */
     generateCellClassNames() {
       Array.from(this.$.items.children)
-        .filter((row) => !row.hidden)
+        .filter((row) => !row.hidden && !row.hasAttribute('loading'))
         .forEach((row) => this._generateCellClassNames(row, this.__getRowModel(row)));
     }
 

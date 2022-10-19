@@ -1,20 +1,20 @@
 import { expect } from '@esm-bundle/chai';
+import { aTimeout, fixtureSync, nextFrame } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { aTimeout, fixtureSync, nextFrame } from '@open-wc/testing-helpers';
-import { flush } from '@polymer/polymer/lib/utils/flush.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
+import '../vaadin-grid.js';
+import '../vaadin-grid-column-group.js';
 import {
   dragAndDropOver,
   dragOver,
   dragStart,
   flushGrid,
   getContainerCell,
-  getRows,
   getRowCells,
+  getRows,
   infiniteDataProvider,
-  makeSoloTouchEvent
+  makeSoloTouchEvent,
 } from './helpers.js';
-import '../vaadin-grid.js';
-import '../vaadin-grid-column-group.js';
 
 function getVisualCellContent(section, row, col) {
   let cell = Array.from(section.querySelectorAll('[part~="cell"]:not([part~="details-cell"])')).pop();
@@ -39,7 +39,7 @@ function getVisualColumnCellContents(grid, col) {
   const headerContent = getVisualCellContent(grid.$.header, getRows(grid.$.header).length - 1, col);
   const footerContent = getVisualCellContent(grid.$.footer, 0, col);
   const bodyContent = Array.from(grid.$.items.children).map((row, rowIndex) =>
-    getVisualCellContent(grid.$.items, rowIndex, col)
+    getVisualCellContent(grid.$.items, rowIndex, col),
   );
   return bodyContent.concat(headerContent).concat(footerContent);
 }
@@ -59,7 +59,7 @@ describe('reordering simple grid', () => {
 
   beforeEach(async () => {
     grid = fixtureSync(`
-      <vaadin-grid style="width: 400px; height: 200px;" size="1" column-reordering-allowed>
+      <vaadin-grid style="width: 450px; height: 200px;" size="1" column-reordering-allowed>
         ${[1, 2, 3, 4].map((col) => {
           return `
             <vaadin-grid-column resizable index="${col}">
@@ -141,7 +141,6 @@ describe('reordering simple grid', () => {
   it('should have the ghost visible again', () => {
     dragAndDropOver(headerContent[0], headerContent[1]);
     dragStart(headerContent[0]);
-    flush();
     expect(grid._reorderGhost.style.visibility).to.equal('visible');
   });
 
@@ -173,7 +172,7 @@ describe('reordering simple grid', () => {
     const e = makeSoloTouchEvent(
       'touchmove',
       { x: 0, y: 0 },
-      getCellByCellContent(headerContent[0]).querySelector('[part~="resize-handle"]')
+      getCellByCellContent(headerContent[0]).querySelector('[part~="resize-handle"]'),
     );
     expect(e.defaultPrevented).to.be.false;
   });
@@ -234,10 +233,32 @@ describe('reordering simple grid', () => {
     });
 
     it('should reorder multiple columns while dragging', () => {
+      // Start column order [1, 2, 3, 4]
+
+      // Drag column 1 on top of column 2. Expected order [2, 1, 3, 4]
       dragOver(headerContent[0], headerContent[1]);
+      // Keep dragging the column all the way over to the last column. Expected order [2, 3, 4, 1]
       dragOver(headerContent[0], headerContent[3]);
       flushGrid(grid);
-      expectVisualOrder(grid, [2, 4, 3, 1]);
+      expectVisualOrder(grid, [2, 3, 4, 1]);
+    });
+
+    it('should shift columns in between when dragged as last', () => {
+      // Start column order [1, 2, 3, 4]
+
+      // Drag column 2 all the way over to the last column. Expected order [1, 3, 4, 2]
+      dragOver(headerContent[1], headerContent[3]);
+      flushGrid(grid);
+      expectVisualOrder(grid, [1, 3, 4, 2]);
+    });
+
+    it('should shift columns in between when dragged as first', () => {
+      // Start column order [1, 2, 3, 4]
+
+      // Drag column 3 over the very first column. Expected order [3, 1, 2, 4]
+      dragOver(headerContent[2], headerContent[0]);
+      flushGrid(grid);
+      expectVisualOrder(grid, [3, 1, 2, 4]);
     });
 
     it('should update first-column attribute', () => {
@@ -289,16 +310,6 @@ describe('reordering simple grid', () => {
       expect(col._order).to.equal(50000000);
     });
 
-    it('should not toggle last-column for cells on existing rows', () => {
-      const attributeSpy = sinon.spy(grid, '_toggleAttribute');
-      grid.size++;
-      flushGrid(grid);
-
-      const calls = attributeSpy.getCalls().filter((f) => f.args[0] === 'last-column');
-      const columnCount = grid.querySelectorAll('vaadin-grid-column').length;
-      expect(calls.length).to.equal(columnCount);
-    });
-
     it('should fire `column-reorder` event with columns', () => {
       const spy = sinon.spy();
       grid.addEventListener('column-reorder', spy);
@@ -345,6 +356,43 @@ describe('reordering simple grid', () => {
       expect(grid.hasAttribute('reordering')).to.be.false;
     });
   });
+
+  describe('columns frozen to end', () => {
+    beforeEach(() => {
+      const columns = grid.querySelectorAll('vaadin-grid-column');
+      columns[2].frozenToEnd = true;
+      columns[3].frozenToEnd = true;
+    });
+
+    it('should allow reordering columns frozen to end', () => {
+      dragAndDropOver(headerContent[3], headerContent[2]);
+      expectVisualOrder(grid, [1, 2, 4, 3]);
+    });
+
+    it('should not allow reordering frozen to end and non-frozen columns', () => {
+      dragAndDropOver(headerContent[2], headerContent[1]);
+      expectVisualOrder(grid, [1, 2, 3, 4]);
+    });
+
+    it('should not allow reordering non-frozen and frozen to end columns', () => {
+      dragAndDropOver(headerContent[1], headerContent[2]);
+      expectVisualOrder(grid, [1, 2, 3, 4]);
+    });
+
+    it('should update first-frozen-to-end while dragging', () => {
+      const cell = getCellByCellContent(headerContent[3]);
+      expect(cell.hasAttribute('first-frozen-to-end')).to.be.false;
+      dragOver(headerContent[3], headerContent[2]);
+      expect(cell.hasAttribute('first-frozen-to-end')).to.be.true;
+    });
+
+    it('should not start reordering on frozen column resize handle move', () => {
+      const handle = getCellByCellContent(headerContent[2]).querySelector('[part~="resize-handle"]');
+      const cell = getCellByCellContent(headerContent[3]);
+      dragOver(handle, cell);
+      expect(grid.hasAttribute('reordering')).to.be.false;
+    });
+  });
 });
 
 describe('reordering grid with columns groups', () => {
@@ -352,8 +400,8 @@ describe('reordering grid with columns groups', () => {
 
   beforeEach(async () => {
     grid = fixtureSync(`
-      <vaadin-grid style="width: 400px; height: 200px;" size="1" column-reordering-allowed>
-        ${[1, 2].map((colgroup) => {
+      <vaadin-grid style="width: 800px; height: 200px;" size="1" column-reordering-allowed>
+        ${[1, 2, 3].map((colgroup) => {
           return `
             <vaadin-grid-column-group>
               <template class="header">${colgroup}</template>
@@ -399,6 +447,20 @@ describe('reordering grid with columns groups', () => {
     expectVisualOrder(grid, [21, 22, 11, 12]);
   });
 
+  it('should reorder all the groups', () => {
+    // Start order
+    // [1,      2,      3     ] <- groups
+    // [11, 12, 21, 22, 31, 32] <- columns
+
+    // Drag the first group over the last group
+    dragAndDropOver(getVisualHeaderCellContent(grid, 0, 0), getVisualHeaderCellContent(grid, 0, 5));
+
+    // Expected order
+    // [2,      3,      1     ] <- groups
+    // [21, 22, 31, 32, 11, 12] <- columns
+    expectVisualOrder(grid, [21, 22, 31, 32, 11, 12]);
+  });
+
   it('should allow dropping group over other groups column header', () => {
     dragAndDropOver(getVisualHeaderCellContent(grid, 0, 0), getVisualHeaderCellContent(grid, 1, 3));
     expectVisualOrder(grid, [21, 22, 11, 12]);
@@ -432,6 +494,7 @@ describe('reordering grid with columns groups', () => {
       const columns = groups[0].querySelectorAll('vaadin-grid-column');
       groups[0].insertBefore(columns[1], columns[0]);
       await nextFrame();
+      flushGrid(grid);
       expectVisualOrder(grid, [12, 11, 21, 22]);
     });
 
@@ -442,6 +505,7 @@ describe('reordering grid with columns groups', () => {
 
       groups[0].insertBefore(columns[1], columns[0]);
       await nextFrame();
+      flushGrid(grid);
       expectVisualOrder(grid, [12, 11, 21, 22]);
     });
   });

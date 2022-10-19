@@ -1,8 +1,9 @@
 import { expect } from '@esm-bundle/chai';
-import { fixtureSync } from '@open-wc/testing-helpers';
-import { registerStyles, css } from '@vaadin/vaadin-themable-mixin/register-styles.js';
-import { flushGrid, getFirstVisibleItem, infiniteDataProvider } from './helpers.js';
+import { fixtureSync } from '@vaadin/testing-helpers';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
 import '../vaadin-grid.js';
+import { css, registerStyles } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
+import { flushGrid, getFirstVisibleItem, infiniteDataProvider } from './helpers.js';
 
 registerStyles(
   'vaadin-grid',
@@ -19,7 +20,7 @@ registerStyles(
     :host(.high) [part~='cell'] {
       line-height: 100px;
     }
-  `
+  `,
 );
 
 describe('dynamic item size', () => {

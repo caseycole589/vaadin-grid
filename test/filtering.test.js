@@ -1,20 +1,13 @@
 import { expect } from '@esm-bundle/chai';
+import { fixtureSync, listenOnce } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { fixtureSync } from '@open-wc/testing-helpers';
-import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
-import { flush } from '@polymer/polymer/lib/utils/flush.js';
-import {
-  flushGrid,
-  getBodyCellContent,
-  getHeaderCellContent,
-  listenOnce,
-  scrollToEnd,
-  getVisibleItems
-} from './helpers.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
 import '../vaadin-grid.js';
 import '../vaadin-grid-filter.js';
 import '../vaadin-grid-filter-column.js';
 import '../vaadin-grid-sorter.js';
+import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
+import { flushGrid, getBodyCellContent, getHeaderCellContent, getVisibleItems, scrollToEnd } from './helpers.js';
 
 class FilterWrapper extends PolymerElement {
   static get template() {
@@ -35,7 +28,7 @@ customElements.define('filter-wrapper', FilterWrapper);
 
 function flushFilters(grid) {
   Array.from(grid.querySelectorAll('vaadin-grid-filter')).forEach(
-    (filter) => filter._debouncerFilterChanged && filter._debouncerFilterChanged.flush()
+    (filter) => filter._debouncerFilterChanged && filter._debouncerFilterChanged.flush(),
   );
 }
 
@@ -150,7 +143,7 @@ describe('filtering', () => {
     grid._filters[0].value = '';
   });
 
-  it('should filter display all filtered items', (done) => {
+  it('should display all filtered items', () => {
     flushFilters(grid);
     grid._filters[0].value = '';
     grid._filters[1].value = '';
@@ -162,14 +155,10 @@ describe('filtering', () => {
     grid.items = items;
     scrollToEnd(grid);
 
-    setTimeout(() => {
-      grid._filters[0].value = '99';
-      flushFilters(grid);
-      requestAnimationFrame(() => {
-        expect(grid.$.items.querySelectorAll('tr:not([hidden])')).to.have.length(19);
-        done();
-      });
-    }, 200);
+    grid._filters[0].value = '99';
+    flushFilters(grid);
+    flushGrid(grid);
+    expect(grid.$.items.querySelectorAll('tr:not([hidden])')).to.have.length(18);
   });
 
   it('should not overflow filter text field', () => {
@@ -181,12 +170,13 @@ describe('filtering', () => {
   });
 
   describe('filter-column', () => {
-    let filterColumn, filter, filterTextField;
+    let filterColumn, filterCellContent, filter, filterTextField;
 
     beforeEach(() => {
       filterColumn = grid.querySelector('vaadin-grid-filter-column');
-      const content = getHeaderCellContent(grid, 0, 2);
-      filter = content.querySelector('vaadin-grid-filter');
+      filterCellContent = getHeaderCellContent(grid, 0, 2);
+
+      filter = filterCellContent.querySelector('vaadin-grid-filter');
       filterTextField = filter.firstElementChild;
     });
 
@@ -208,6 +198,14 @@ describe('filtering', () => {
     it('should apply the input fields value to the filter', () => {
       filterTextField.value = 'foo';
       expect(filter.value).to.equal('foo');
+    });
+
+    it('should ignore a custom header renderer', () => {
+      filterColumn.headerRenderer = (root) => {
+        root.innerHTML = 'header';
+      };
+
+      expect(filterCellContent.firstElementChild).to.equal(filter);
     });
   });
 });
@@ -248,16 +246,16 @@ describe('array data provider', () => {
     grid.items = [
       {
         first: 'foo',
-        last: 'bar'
+        last: 'bar',
       },
       {
         first: 'foo',
-        last: 'baz'
+        last: 'baz',
       },
       {
         first: 'bar',
-        last: 'bar'
-      }
+        last: 'bar',
+      },
     ];
 
     flushGrid(grid);
@@ -339,7 +337,6 @@ describe('lazy init', () => {
     grid.dataProvider = () => {
       // Don't provide any data
     };
-    flush();
     expect(flushFilters.bind(window, grid)).to.not.throw(Error);
   });
 });

@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
 
@@ -13,18 +13,27 @@ export const SelectionMixin = (superClass) =>
       return {
         /**
          * An array that contains the selected items.
-         * @type {Array<GridItem>}
+         * @type {!Array<!GridItem>}
          */
         selectedItems: {
           type: Object,
           notify: true,
-          value: () => []
-        }
+          value: () => [],
+        },
+
+        /**
+         * Set of selected item ids
+         * @private
+         */
+        __selectedKeys: {
+          type: Object,
+          computed: '__computeSelectedKeys(itemIdPath, selectedItems.*)',
+        },
       };
     }
 
     static get observers() {
-      return ['_selectedItemsChanged(selectedItems.*)'];
+      return ['__selectedItemsChanged(itemIdPath, selectedItems.*)'];
     }
 
     /**
@@ -33,7 +42,7 @@ export const SelectionMixin = (superClass) =>
      * @protected
      */
     _isSelected(item) {
-      return this.selectedItems && this._getItemIndexInArray(item, this.selectedItems) > -1;
+      return this.__selectedKeys.has(this.getItemId(item));
     }
 
     /**
@@ -44,7 +53,7 @@ export const SelectionMixin = (superClass) =>
      */
     selectItem(item) {
       if (!this._isSelected(item)) {
-        this.push('selectedItems', item);
+        this.selectedItems = [...this.selectedItems, item];
       }
     }
 
@@ -55,9 +64,8 @@ export const SelectionMixin = (superClass) =>
      * @param {!GridItem} item The item object
      */
     deselectItem(item) {
-      const index = this._getItemIndexInArray(item, this.selectedItems);
-      if (index > -1) {
-        this.splice('selectedItems', index, 1);
+      if (this._isSelected(item)) {
+        this.selectedItems = this.selectedItems.filter((i) => !this._itemsEqual(i, item));
       }
     }
 
@@ -69,8 +77,7 @@ export const SelectionMixin = (superClass) =>
      * @protected
      */
     _toggleItem(item) {
-      const index = this._getItemIndexInArray(item, this.selectedItems);
-      if (index === -1) {
+      if (!this._isSelected(item)) {
         this.selectItem(item);
       } else {
         this.deselectItem(item);
@@ -78,21 +85,19 @@ export const SelectionMixin = (superClass) =>
     }
 
     /** @private */
-    _selectedItemsChanged(e) {
-      if (this.$.items.children.length && (e.path === 'selectedItems' || e.path === 'selectedItems.splices')) {
-        Array.from(this.$.items.children).forEach((row) => {
-          this._updateItem(row, row._item);
-        });
-      }
+    __selectedItemsChanged() {
+      this.requestContentUpdate();
     }
 
     /** @private */
-    _selectedInstanceChangedCallback(instance, value) {
-      if (value) {
-        this.selectItem(instance.item);
-      } else {
-        this.deselectItem(instance.item);
-      }
+    __computeSelectedKeys(itemIdPath, selectedItems) {
+      const selected = selectedItems.base || [];
+      const selectedKeys = new Set();
+      selected.forEach((item) => {
+        selectedKeys.add(this.getItemId(item));
+      });
+
+      return selectedKeys;
     }
 
     /**

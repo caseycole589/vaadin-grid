@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
 
@@ -14,10 +14,8 @@ export const FilterMixin = (superClass) =>
         /** @private */
         _filters: {
           type: Array,
-          value: function () {
-            return [];
-          }
-        }
+          value: () => [],
+        },
       };
     }
 
@@ -37,7 +35,7 @@ export const FilterMixin = (superClass) =>
 
     /** @private */
     __removeFilters(filtersToRemove) {
-      if (filtersToRemove.length == 0) {
+      if (filtersToRemove.length === 0) {
         return;
       }
 
@@ -62,14 +60,14 @@ export const FilterMixin = (superClass) =>
     }
 
     /**
-     * @return {!Array<!GridFilter>}
+     * @return {!Array<!GridFilterDefinition>}
      * @protected
      */
     _mapFilters() {
       return this._filters.map((filter) => {
         return {
           path: filter.path,
-          value: filter.value
+          value: filter.value,
         };
       });
     }

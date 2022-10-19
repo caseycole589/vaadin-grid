@@ -1,21 +1,24 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
 const DropMode = {
   BETWEEN: 'between',
   ON_TOP: 'on-top',
   ON_TOP_OR_BETWEEN: 'on-top-or-between',
-  ON_GRID: 'on-grid'
+  ON_GRID: 'on-grid',
 };
 
 const DropLocation = {
   ON_TOP: 'on-top',
   ABOVE: 'above',
   BELOW: 'below',
-  EMPTY: 'empty'
+  EMPTY: 'empty',
 };
+
+// Detects if the browser doesn't support HTML5 Drag & Drop API (and falls back to the @vaadin/vaadin-mobile-drag-drop polyfill)
+const usesDnDPolyfill = !('draggable' in document.createElement('div'));
 
 /**
  * @polymerMixin
@@ -79,13 +82,13 @@ export const DragAndDropMixin = (superClass) =>
 
         /** @private */
         __dndAutoScrollThreshold: {
-          value: 50
-        }
+          value: 50,
+        },
       };
     }
 
     static get observers() {
-      return ['_dragDropAccessChanged(rowsDraggable, dropMode, dragFilter, dropFilter)'];
+      return ['_dragDropAccessChanged(rowsDraggable, dropMode, dragFilter, dropFilter, loading)'];
     }
 
     /** @protected */
@@ -117,11 +120,11 @@ export const DragAndDropMixin = (superClass) =>
         }
 
         e.stopPropagation();
-        this._toggleAttribute('dragging-rows', true, this);
+        this.toggleAttribute('dragging-rows', true);
 
         if (this._safari) {
-          // Safari doesn't get proper drag images from transformed
-          // elements so we need to switch to top temporarily
+          // Safari doesn't position drag images from transformed
+          // elements properly so we need to switch to use top temporarily
           const transform = row.style.transform;
           row.style.top = /translateY\((.*)\)/.exec(transform)[1];
           row.style.transform = 'none';
@@ -133,9 +136,11 @@ export const DragAndDropMixin = (superClass) =>
 
         const rowRect = row.getBoundingClientRect();
 
-        if (this._ios) {
+        if (usesDnDPolyfill) {
+          // The polyfill drag image is automatically centered so there is no need to adjust the position
           e.dataTransfer.setDragImage(row);
         } else {
+          // The native drag image needs to be shifted manually to compensate for the touch position offset
           e.dataTransfer.setDragImage(row, e.clientX - rowRect.left, e.clientY - rowRect.top);
         }
 
@@ -150,10 +155,8 @@ export const DragAndDropMixin = (superClass) =>
         e.dataTransfer.setData('text', this.__formatDefaultTransferData(rows));
 
         row.setAttribute('dragstart', rows.length > 1 ? rows.length : '');
-        this.updateStyles({
-          '--_grid-drag-start-x': `${e.clientX - rowRect.left + 20}px`,
-          '--_grid-drag-start-y': `${e.clientY - rowRect.top + 10}px`
-        });
+        this.style.setProperty('--_grid-drag-start-x', `${e.clientX - rowRect.left + 20}px`);
+        this.style.setProperty('--_grid-drag-start-y', `${e.clientY - rowRect.top + 10}px`);
 
         requestAnimationFrame(() => {
           row.removeAttribute('dragstart');
@@ -164,8 +167,8 @@ export const DragAndDropMixin = (superClass) =>
           detail: {
             draggedItems: rows.map((row) => row._item),
             setDragData: (type, data) => e.dataTransfer.setData(type, data),
-            setDraggedItemsCount: (count) => row.setAttribute('dragstart', count)
-          }
+            setDraggedItemsCount: (count) => row.setAttribute('dragstart', count),
+          },
         });
         event.originalEvent = e;
         this.dispatchEvent(event);
@@ -174,7 +177,7 @@ export const DragAndDropMixin = (superClass) =>
 
     /** @private */
     _onDragEnd(e) {
-      this._toggleAttribute('dragging-rows', false, this);
+      this.toggleAttribute('dragging-rows', false);
       e.stopPropagation();
       const event = new CustomEvent('grid-dragend');
       event.originalEvent = e;
@@ -245,7 +248,7 @@ export const DragAndDropMixin = (superClass) =>
         e.preventDefault();
 
         if (this._dropLocation === DropLocation.EMPTY) {
-          this._toggleAttribute('dragover', true, this);
+          this.toggleAttribute('dragover', true);
         } else if (row) {
           this._dragOverItem = row._item;
           if (row.getAttribute('dragover') !== this._dropLocation) {
@@ -282,8 +285,9 @@ export const DragAndDropMixin = (superClass) =>
         if (scrollTopChanged) {
           this.__dndAutoScrolling = true;
           // Disallow more auto-scrolls within 20ms
-          setTimeout(() => (this.__dndAutoScrolling = false), 20);
-          this._scrollHandler();
+          setTimeout(() => {
+            this.__dndAutoScrolling = false;
+          }, 20);
           return true;
         }
       }
@@ -316,7 +320,7 @@ export const DragAndDropMixin = (superClass) =>
           Array.from(e.dataTransfer.types).map((type) => {
             return {
               type,
-              data: e.dataTransfer.getData(type)
+              data: e.dataTransfer.getData(type),
             };
           });
 
@@ -328,8 +332,8 @@ export const DragAndDropMixin = (superClass) =>
           detail: {
             dropTargetItem: this._dragOverItem,
             dropLocation: this._dropLocation,
-            dragData
-          }
+            dragData,
+          },
         });
         event.originalEvent = e;
         this.dispatchEvent(event);
@@ -377,8 +381,9 @@ export const DragAndDropMixin = (superClass) =>
      * @protected
      */
     _filterDragAndDrop(row, model) {
-      const dragDisabled = !this.rowsDraggable || (this.dragFilter && !this.dragFilter(model));
-      const dropDisabled = !this.dropMode || (this.dropFilter && !this.dropFilter(model));
+      const loading = this.loading || row.hasAttribute('loading');
+      const dragDisabled = !this.rowsDraggable || loading || (this.dragFilter && !this.dragFilter(model));
+      const dropDisabled = !this.dropMode || loading || (this.dropFilter && !this.dropFilter(model));
 
       const draggableElements = Array.from(row.children).map((cell) => cell._content);
 
@@ -390,8 +395,8 @@ export const DragAndDropMixin = (superClass) =>
         }
       });
 
-      this._toggleAttribute('drag-disabled', dragDisabled, row);
-      this._toggleAttribute('drop-disabled', dropDisabled, row);
+      row.toggleAttribute('drag-disabled', !!dragDisabled);
+      row.toggleAttribute('drop-disabled', !!dropDisabled);
     }
 
     /**

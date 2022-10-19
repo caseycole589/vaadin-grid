@@ -1,16 +1,16 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
-import { GestureEventListeners } from '@polymer/polymer/lib/mixins/gesture-event-listeners.js';
-import { addListener } from '@polymer/polymer/lib/utils/gestures.js';
+import { addListener } from '@vaadin/component-base/src/gestures.js';
+import { updateColumnOrders } from './vaadin-grid-helpers.js';
 
 /**
  * @polymerMixin
  */
 export const ColumnReorderingMixin = (superClass) =>
-  class ColumnReorderingMixin extends GestureEventListeners(superClass) {
+  class ColumnReorderingMixin extends superClass {
     static get properties() {
       return {
         /**
@@ -20,14 +20,14 @@ export const ColumnReorderingMixin = (superClass) =>
          */
         columnReorderingAllowed: {
           type: Boolean,
-          value: false
+          value: false,
         },
 
         /** @private */
         _orderBaseScope: {
           type: Number,
-          value: 10000000
-        }
+          value: 10000000,
+        },
       };
     }
 
@@ -35,6 +35,7 @@ export const ColumnReorderingMixin = (superClass) =>
       return ['_updateOrders(_columnTree, _columnTree.*)'];
     }
 
+    /** @protected */
     ready() {
       super.ready();
       addListener(this, 'track', this._onTrackEvent);
@@ -60,8 +61,8 @@ export const ColumnReorderingMixin = (superClass) =>
         this._onTrackStart({
           detail: {
             x: e.touches[0].clientX,
-            y: e.touches[0].clientY
-          }
+            y: e.touches[0].clientY,
+          },
         });
       }, 100);
     }
@@ -128,7 +129,7 @@ export const ColumnReorderingMixin = (superClass) =>
         return;
       }
 
-      this._toggleAttribute('reordering', true, this);
+      this.toggleAttribute('reordering', true);
       this._draggedColumn = headerCell._column;
       while (this._draggedColumn.parentElement.childElementCount === 1) {
         // This is the only column in the group, drag the whole group instead
@@ -160,7 +161,23 @@ export const ColumnReorderingMixin = (superClass) =>
         this._isSwapAllowed(this._draggedColumn, targetColumn) &&
         this._isSwappableByPosition(targetColumn, e.detail.x)
       ) {
-        this._swapColumnOrders(this._draggedColumn, targetColumn);
+        // Get the column header level of the target column (and the dragged column)
+        const columnTreeLevel = this._columnTree.findIndex((level) => level.includes(targetColumn));
+        // Get the columns on that level in visual order
+        const levelColumnsInOrder = this._getColumnsInOrder(columnTreeLevel);
+
+        // Index of the column being dragged
+        const startIndex = levelColumnsInOrder.indexOf(this._draggedColumn);
+        // Index of the column being dragged over
+        const endIndex = levelColumnsInOrder.indexOf(targetColumn);
+
+        // Direction of iteration
+        const direction = startIndex < endIndex ? 1 : -1;
+
+        // Iteratively swap all the columns from the dragged column to the target column
+        for (let i = startIndex; i !== endIndex; i += direction) {
+          this._swapColumnOrders(this._draggedColumn, levelColumnsInOrder[i + direction]);
+        }
       }
 
       this._updateGhostPosition(e.detail.x, this._touchDevice ? e.detail.y - 50 : e.detail.y);
@@ -174,7 +191,7 @@ export const ColumnReorderingMixin = (superClass) =>
         return;
       }
 
-      this._toggleAttribute('reordering', false, this);
+      this.toggleAttribute('reordering', false);
       this._draggedColumn._reorderStatus = '';
       this._setSiblingsReorderStatus(this._draggedColumn, '');
       this._draggedColumn = null;
@@ -184,22 +201,21 @@ export const ColumnReorderingMixin = (superClass) =>
       this.dispatchEvent(
         new CustomEvent('column-reorder', {
           detail: {
-            columns: this._getColumnsInOrder()
-          }
-        })
+            columns: this._getColumnsInOrder(),
+          },
+        }),
       );
     }
 
     /**
-     * @return {!Array<!GridColumnElement>}
+     * Returns the columns (or column groups) on the specified header level in visual order.
+     * By default, the bottom level is used.
+     *
+     * @return {!Array<!GridColumn>}
      * @protected
      */
-    _getColumnsInOrder() {
-      return this._columnTree
-        .slice(0)
-        .pop()
-        .filter((c) => !c.hidden)
-        .sort((b, a) => b._order - a._order);
+    _getColumnsInOrder(headerLevel = this._columnTree.length - 1) {
+      return this._columnTree[headerLevel].filter((c) => !c.hidden).sort((b, a) => b._order - a._order);
     }
 
     /**
@@ -212,10 +228,10 @@ export const ColumnReorderingMixin = (superClass) =>
       x = x || 0;
       y = y || 0;
       if (!this._draggedColumn) {
-        this._toggleAttribute('no-content-pointer-events', true, this.$.scroller);
+        this.$.scroller.toggleAttribute('no-content-pointer-events', true);
       }
       const cell = this.shadowRoot.elementFromPoint(x, y);
-      this._toggleAttribute('no-content-pointer-events', false, this.$.scroller);
+      this.$.scroller.toggleAttribute('no-content-pointer-events', false);
 
       // Make sure the element is actually a cell
       if (cell && cell._column) {
@@ -261,8 +277,10 @@ export const ColumnReorderingMixin = (superClass) =>
         'padding',
         'border',
         'flex-direction',
-        'overflow'
-      ].forEach((propertyName) => (ghost.style[propertyName] = style[propertyName]));
+        'overflow',
+      ].forEach((propertyName) => {
+        ghost.style[propertyName] = style[propertyName];
+      });
       return ghost;
     }
 
@@ -273,20 +291,24 @@ export const ColumnReorderingMixin = (superClass) =>
       }
 
       // Reset all column orders
-      columnTree[0].forEach((column) => (column._order = 0));
+      columnTree[0].forEach((column) => {
+        column._order = 0;
+      });
       // Set order numbers to top-level columns
-      columnTree[0].forEach((column, index) => (column._order = (index + 1) * this._orderBaseScope));
+      updateColumnOrders(columnTree[0], this._orderBaseScope, 0);
     }
 
     /**
-     * @param {!GridColumnElement} column
+     * @param {!GridColumn} column
      * @param {string} status
      * @protected
      */
     _setSiblingsReorderStatus(column, status) {
       Array.from(column.parentNode.children)
         .filter((child) => /column/.test(child.localName) && this._isSwapAllowed(child, column))
-        .forEach((sibling) => (sibling._reorderStatus = status));
+        .forEach((sibling) => {
+          sibling._reorderStatus = status;
+        });
     }
 
     /** @protected */
@@ -300,17 +322,16 @@ export const ColumnReorderingMixin = (superClass) =>
         } else if (leftDiff > 0) {
           this.$.table.scrollLeft -= leftDiff / 10;
         }
-        this._scrollHandler();
       }
 
       if (this._draggedColumn) {
-        this.async(this._autoScroller, 10);
+        setTimeout(() => this._autoScroller(), 10);
       }
     }
 
     /**
-     * @param {GridColumnElement | undefined} column1
-     * @param {GridColumnElement | undefined} column2
+     * @param {GridColumn | undefined} column1
+     * @param {GridColumn | undefined} column2
      * @return {boolean | undefined}
      * @protected
      */
@@ -318,20 +339,23 @@ export const ColumnReorderingMixin = (superClass) =>
       if (column1 && column2) {
         const differentColumns = column1 !== column2;
         const sameParent = column1.parentElement === column2.parentElement;
-        const sameFrozen = column1.frozen === column2.frozen;
+        const sameFrozen =
+          (column1.frozen && column2.frozen) || // Both columns are frozen
+          (column1.frozenToEnd && column2.frozenToEnd) || // Both columns are frozen to end
+          (!column1.frozen && !column1.frozenToEnd && !column2.frozen && !column2.frozenToEnd);
         return differentColumns && sameParent && sameFrozen;
       }
     }
 
     /**
-     * @param {!GridColumnElement} targetColumn
+     * @param {!GridColumn} targetColumn
      * @param {number} clientX
      * @return {boolean}
      * @protected
      */
     _isSwappableByPosition(targetColumn, clientX) {
       const targetCell = Array.from(this.$.header.querySelectorAll('tr:not([hidden]) [part~="cell"]')).filter((cell) =>
-        targetColumn.contains(cell._column)
+        targetColumn.contains(cell._column),
       )[0];
       const sourceCellRect = this.$.header
         .querySelector('tr:not([hidden]) [reorder-status=dragging]')
@@ -339,28 +363,27 @@ export const ColumnReorderingMixin = (superClass) =>
       const targetRect = targetCell.getBoundingClientRect();
       if (targetRect.left > sourceCellRect.left) {
         return clientX > targetRect.right - sourceCellRect.width;
-      } else {
-        return clientX < targetRect.left + sourceCellRect.width;
       }
+      return clientX < targetRect.left + sourceCellRect.width;
     }
 
     /**
-     * @param {!GridColumnElement} column1
-     * @param {!GridColumnElement} column2
+     * @param {!GridColumn} column1
+     * @param {!GridColumn} column2
      * @protected
      */
     _swapColumnOrders(column1, column2) {
       const _order = column1._order;
       column1._order = column2._order;
       column2._order = _order;
-      this._updateLastFrozen();
+      this._updateFrozenColumn();
       this._updateFirstAndLastColumn();
     }
 
     /**
      * @param {HTMLElement | undefined} targetCell
-     * @param {GridColumnElement} draggedColumn
-     * @return {GridColumnElement | undefined}
+     * @param {GridColumn} draggedColumn
+     * @return {GridColumn | undefined}
      * @protected
      */
     _getTargetColumn(targetCell, draggedColumn) {
@@ -371,9 +394,8 @@ export const ColumnReorderingMixin = (superClass) =>
         }
         if (candidate.parentElement === draggedColumn.parentElement) {
           return candidate;
-        } else {
-          return targetCell._column;
         }
+        return targetCell._column;
       }
     }
 

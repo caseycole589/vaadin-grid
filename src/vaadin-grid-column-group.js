@@ -1,12 +1,14 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
-import { PolymerElement } from '@polymer/polymer/polymer-element.js';
-import { microTask } from '@polymer/polymer/lib/utils/async.js';
 import { FlattenedNodesObserver } from '@polymer/polymer/lib/utils/flattened-nodes-observer.js';
+import { PolymerElement } from '@polymer/polymer/polymer-element.js';
+import { animationFrame, microTask } from '@vaadin/component-base/src/async.js';
+import { Debouncer } from '@vaadin/component-base/src/debounce.js';
 import { ColumnBaseMixin } from './vaadin-grid-column.js';
+import { updateColumnOrders } from './vaadin-grid-helpers.js';
 
 /**
  * A `<vaadin-grid-column-group>` is used to make groups of columns in `<vaadin-grid>` and
@@ -14,28 +16,33 @@ import { ColumnBaseMixin } from './vaadin-grid-column.js';
  *
  * Groups can be nested to create complex header and footer configurations.
  *
- * The `class` attribute is used to differentiate header and footer templates.
- *
  * #### Example:
  * ```html
- * <vaadin-grid-column-group resizable>
- *  <template class="header">Name</template>
- *
- *  <vaadin-grid-column>
- *    <template class="header">First</template>
- *    <template>[[item.name.first]]</template>
- *  </vaadin-grid-column>
- *  <vaadin-grid-column>
- *    <template class="header">Last</template>
- *    <template>[[item.name.last]]</template>
- *  </vaadin-grid-column>
+ * <vaadin-grid-column-group resizable id="columnGroup">
+ *   <vaadin-grid-column id="column1"></vaadin-grid-column>
+ *   <vaadin-grid-column id="column2"></vaadin-grid-column>
  * </vaadin-grid-column-group>
+ * ```
+ *
+ * ```js
+ * const columnGroup = document.querySelector('#columnGroup');
+ * columnGroup.headerRenderer = (root, columnGroup) => {
+ *   root.textContent = 'header';
+ * }
+ *
+ * const column1 = document.querySelector('#column1');
+ * column1.headerRenderer = (root, column) => { ... };
+ * column1.renderer = (root, column, model) => { ... };
+ *
+ * const column2 = document.querySelector('#column2');
+ * column2.headerRenderer = (root, column) => { ... };
+ * column2.renderer = (root, column, model) => { ... };
  * ```
  *
  * @extends HTMLElement
  * @mixes ColumnBaseMixin
  */
-class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
+class GridColumnGroup extends ColumnBaseMixin(PolymerElement) {
   static get is() {
     return 'vaadin-grid-column-group';
   }
@@ -44,9 +51,9 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
     return {
       /** @private */
       _childColumns: {
-        value: function () {
+        value() {
           return this._getChildColumns(this);
-        }
+        },
       },
 
       /**
@@ -55,7 +62,7 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
        */
       flexGrow: {
         type: Number,
-        readOnly: true
+        readOnly: true,
       },
 
       /**
@@ -63,7 +70,7 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
        */
       width: {
         type: String,
-        readOnly: true
+        readOnly: true,
       },
 
       /** @private */
@@ -73,21 +80,19 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
       _colSpan: Number,
 
       /** @private */
-      _rootColumns: Array
+      _rootColumns: Array,
     };
   }
 
   static get observers() {
     return [
-      '_updateVisibleChildColumns(_childColumns)',
-      '_childColumnsChanged(_childColumns)',
       '_groupFrozenChanged(frozen, _rootColumns)',
-      '_groupHiddenChanged(hidden, _rootColumns)',
-      '_visibleChildColumnsChanged(_visibleChildColumns)',
+      '_groupFrozenToEndChanged(frozenToEnd, _rootColumns)',
+      '_groupHiddenChanged(hidden)',
       '_colSpanChanged(_colSpan, _headerCell, _footerCell)',
       '_groupOrderChanged(_order, _rootColumns)',
       '_groupReorderStatusChanged(_reorderStatus, _rootColumns)',
-      '_groupResizableChanged(resizable, _rootColumns)'
+      '_groupResizableChanged(resizable, _rootColumns)',
     ];
   }
 
@@ -101,7 +106,9 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
   /** @protected */
   disconnectedCallback() {
     super.disconnectedCallback();
-    this._observer && this._observer.disconnect();
+    if (this._observer) {
+      this._observer.disconnect();
+    }
   }
 
   /**
@@ -111,9 +118,12 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
    */
   _columnPropChanged(path, value) {
     if (path === 'hidden') {
-      this._preventHiddenCascade = true;
+      // Prevent synchronization of the hidden state to child columns.
+      // If the group is currently auto-hidden, and one column is made visible,
+      // we don't want the other columns to become visible as well.
+      this._preventHiddenSynchronization = true;
       this._updateVisibleChildColumns(this._childColumns);
-      this._preventHiddenCascade = false;
+      this._preventHiddenSynchronization = false;
     }
 
     if (/flexGrow|width|hidden|_childColumns/.test(path)) {
@@ -129,6 +139,16 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
       // Don’t unfreeze the frozen group because of a non-frozen child
       this._lastFrozen = this._lastFrozen || value;
     }
+
+    if (path === 'frozenToEnd') {
+      // Don’t unfreeze the frozen group because of a non-frozen child
+      this.frozenToEnd = this.frozenToEnd || value;
+    }
+
+    if (path === 'firstFrozenToEnd') {
+      // Don’t unfreeze the frozen group because of a non-frozen child
+      this._firstFrozenToEnd = this._firstFrozenToEnd || value;
+    }
   }
 
   /** @private */
@@ -137,7 +157,9 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
       const _rootColumns = rootColumns.slice(0);
 
       if (!order) {
-        _rootColumns.forEach((column) => (column._order = 0));
+        _rootColumns.forEach((column) => {
+          column._order = 0;
+        });
         return;
       }
       // The parent column order number cascades downwards to it's children
@@ -151,16 +173,17 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
 
       // In an unlikely situation where a group has more than 9 child columns,
       // the child scope must have 1 digit less...
-      const childCountDigits = ~~(Math.log(rootColumns.length) / Math.log(Math.LN10)) + 1;
+      // Log^a_b = Ln(a)/Ln(b)
+      // Number of digits of a number is equal to floor(Log(number)_10) + 1
+      const childCountDigits = ~~(Math.log(rootColumns.length) / Math.LN10) + 1;
 
       // Final scope for the child columns needs to mind both factors.
-      const scope = Math.pow(10, trailingZeros - childCountDigits);
+      const scope = 10 ** (trailingZeros - childCountDigits);
 
       if (_rootColumns[0] && _rootColumns[0]._order) {
         _rootColumns.sort((a, b) => a._order - b._order);
       }
-
-      _rootColumns.forEach((column, index) => (column._order = order + (index + 1) * scope));
+      updateColumnOrders(_rootColumns, scope, order);
     }
   }
 
@@ -170,7 +193,9 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
       return;
     }
 
-    rootColumns.forEach((column) => (column._reorderStatus = reorderStatus));
+    rootColumns.forEach((column) => {
+      column._reorderStatus = reorderStatus;
+    });
   }
 
   /** @private */
@@ -179,20 +204,16 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
       return;
     }
 
-    rootColumns.forEach((column) => (column.resizable = resizable));
+    rootColumns.forEach((column) => {
+      column.resizable = resizable;
+    });
   }
 
   /** @private */
   _updateVisibleChildColumns(childColumns) {
     this._visibleChildColumns = Array.prototype.filter.call(childColumns, (col) => !col.hidden);
-  }
-
-  /** @private */
-  _childColumnsChanged(childColumns) {
-    if (!this._autoHidden && this.hidden) {
-      Array.prototype.forEach.call(childColumns, (column) => (column.hidden = true));
-      this._updateVisibleChildColumns(childColumns);
-    }
+    this._colSpan = this._visibleChildColumns.length;
+    this._updateAutoHidden();
   }
 
   /** @protected */
@@ -201,23 +222,55 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
       return;
     }
 
-    if (this._visibleChildColumns.length) {
-      this._setWidth(
-        'calc(' +
-          Array.prototype.reduce
-            .call(
-              this._visibleChildColumns,
-              (prev, curr) => (prev += ' + ' + (curr.width || '0px').replace('calc', '')),
-              ''
-            )
-            .substring(3) +
-          ')'
-      );
+    if (this._visibleChildColumns.length > 0) {
+      const width = this._visibleChildColumns
+        .reduce((prev, curr) => {
+          prev += ` + ${(curr.width || '0px').replace('calc', '')}`;
+          return prev;
+        }, '')
+        .substring(3);
+      this._setWidth(`calc(${width})`);
     } else {
       this._setWidth('0px');
     }
 
     this._setFlexGrow(Array.prototype.reduce.call(this._visibleChildColumns, (prev, curr) => prev + curr.flexGrow, 0));
+  }
+
+  /**
+   * This method is called before the group's frozen value is being propagated to the child columns.
+   * In case some of the child columns are frozen, while others are not, the non-frozen ones
+   * will get automatically frozen as well. As this may sometimes be unintended, this method
+   * shows a warning in the console in such cases.
+   * @private
+   */
+  __scheduleAutoFreezeWarning(columns, frozenProp) {
+    if (this._grid) {
+      // Derive the attribute name from the property name
+      const frozenAttr = frozenProp.replace(/([A-Z])/g, '-$1').toLowerCase();
+
+      // Check if all the columns have the same frozen value
+      const firstColumnFrozen = columns[0][frozenProp] || columns[0].hasAttribute(frozenAttr);
+      const allSameFrozen = columns.every((column) => {
+        return (column[frozenProp] || column.hasAttribute(frozenAttr)) === firstColumnFrozen;
+      });
+
+      if (!allSameFrozen) {
+        // Some of the child columns are frozen, some are not. Show a warning.
+        this._grid.__autoFreezeWarningDebouncer = Debouncer.debounce(
+          this._grid.__autoFreezeWarningDebouncer,
+          animationFrame,
+          () => {
+            console.warn(
+              `WARNING: Joining ${frozenProp} and non-${frozenProp} Grid columns inside the same column group! ` +
+                `This will automatically freeze all the joined columns to avoid rendering issues. ` +
+                `If this was intentional, consider marking each joined column explicitly as ${frozenProp}. ` +
+                `Otherwise, exclude the ${frozenProp} columns from the joined group.`,
+            );
+          },
+        );
+      }
+    }
   }
 
   /** @private */
@@ -228,31 +281,58 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
 
     // Don’t propagate the default `false` value.
     if (frozen !== false) {
-      Array.from(rootColumns).forEach((col) => (col.frozen = frozen));
+      this.__scheduleAutoFreezeWarning(rootColumns, 'frozen');
+
+      Array.from(rootColumns).forEach((col) => {
+        col.frozen = frozen;
+      });
     }
   }
 
   /** @private */
-  _groupHiddenChanged(hidden, rootColumns) {
-    if (rootColumns && !this._preventHiddenCascade) {
-      this._ignoreVisibleChildColumns = true;
-      rootColumns.forEach((column) => (column.hidden = hidden));
-      this._ignoreVisibleChildColumns = false;
+  _groupFrozenToEndChanged(frozenToEnd, rootColumns) {
+    if (rootColumns === undefined || frozenToEnd === undefined) {
+      return;
     }
 
-    this._columnPropChanged('hidden');
+    // Don’t propagate the default `false` value.
+    if (frozenToEnd !== false) {
+      this.__scheduleAutoFreezeWarning(rootColumns, 'frozenToEnd');
+
+      Array.from(rootColumns).forEach((col) => {
+        col.frozenToEnd = frozenToEnd;
+      });
+    }
   }
 
   /** @private */
-  _visibleChildColumnsChanged(visibleChildColumns) {
-    this._colSpan = visibleChildColumns.length;
+  _groupHiddenChanged(hidden) {
+    // When initializing the hidden property, only sync hidden state to columns
+    // if group is actually hidden. Otherwise, we could override a hidden column
+    // to be visible.
+    // We always want to run this though if the property is actually changed.
+    if (hidden || this.__groupHiddenInitialized) {
+      this._synchronizeHidden();
+    }
+    this.__groupHiddenInitialized = true;
+  }
 
-    if (!this._ignoreVisibleChildColumns) {
-      if (visibleChildColumns.length === 0) {
-        this._autoHidden = this.hidden = true;
-      } else if (this.hidden && this._autoHidden) {
-        this._autoHidden = this.hidden = false;
-      }
+  /** @private */
+  _updateAutoHidden() {
+    const wasAutoHidden = this._autoHidden;
+    this._autoHidden = (this._visibleChildColumns || []).length === 0;
+    // Only modify hidden state if group was auto-hidden, or becomes auto-hidden
+    if (wasAutoHidden || this._autoHidden) {
+      this.hidden = this._autoHidden;
+    }
+  }
+
+  /** @private */
+  _synchronizeHidden() {
+    if (this._childColumns && !this._preventHiddenSynchronization) {
+      this._childColumns.forEach((column) => {
+        column.hidden = this.hidden;
+      });
     }
   }
 
@@ -260,17 +340,21 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
   _colSpanChanged(colSpan, headerCell, footerCell) {
     if (headerCell) {
       headerCell.setAttribute('colspan', colSpan);
-      this._grid && this._grid._a11yUpdateCellColspan(headerCell, colSpan);
+      if (this._grid) {
+        this._grid._a11yUpdateCellColspan(headerCell, colSpan);
+      }
     }
     if (footerCell) {
       footerCell.setAttribute('colspan', colSpan);
-      this._grid && this._grid._a11yUpdateCellColspan(footerCell, colSpan);
+      if (this._grid) {
+        this._grid._a11yUpdateCellColspan(footerCell, colSpan);
+      }
     }
   }
 
   /**
-   * @param {!GridColumnGroupElement} el
-   * @return {!Array<!GridColumnElement>}
+   * @param {!GridColumnGroup} el
+   * @return {!Array<!GridColumn>}
    * @protected
    */
   _getChildColumns(el) {
@@ -284,14 +368,20 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
         info.addedNodes.filter(this._isColumnElement).length > 0 ||
         info.removedNodes.filter(this._isColumnElement).length > 0
       ) {
-        this._preventHiddenCascade = true;
+        // Prevent synchronization of the hidden state to child columns.
+        // If the group is currently auto-hidden, and a visible column is added,
+        // we don't want the other columns to become visible as well.
+        this._preventHiddenSynchronization = true;
         this._rootColumns = this._getChildColumns(this);
         this._childColumns = this._rootColumns;
-        this._preventHiddenCascade = false;
+        this._updateVisibleChildColumns(this._childColumns);
+        this._preventHiddenSynchronization = false;
 
         // Update the column tree with microtask timing to avoid shady style scope issues
         microTask.run(() => {
-          this._grid && this._grid._updateColumnTree && this._grid._updateColumnTree();
+          if (this._grid && this._grid._updateColumnTree) {
+            this._grid._updateColumnTree();
+          }
         });
       }
     });
@@ -308,6 +398,6 @@ class GridColumnGroupElement extends ColumnBaseMixin(PolymerElement) {
   }
 }
 
-customElements.define(GridColumnGroupElement.is, GridColumnGroupElement);
+customElements.define(GridColumnGroup.is, GridColumnGroup);
 
-export { GridColumnGroupElement };
+export { GridColumnGroup };

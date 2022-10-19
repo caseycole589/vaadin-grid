@@ -1,16 +1,16 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
-import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
+import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
+import { DirMixin } from '@vaadin/component-base/src/dir-mixin.js';
 import { ThemableMixin } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
-import { DirMixin } from '@vaadin/vaadin-element-mixin/vaadin-dir-mixin.js';
 import { isFocusable } from './vaadin-grid-active-item-mixin.js';
 
-const $_documentContainer = document.createElement('template');
+const template = document.createElement('template');
 
-$_documentContainer.innerHTML = `
+template.innerHTML = `
   <style>
     @font-face {
       font-family: "vaadin-grid-tree-icons";
@@ -21,7 +21,7 @@ $_documentContainer.innerHTML = `
   </style>
 `;
 
-document.head.appendChild($_documentContainer.content);
+document.head.appendChild(template.content);
 
 /**
  * `<vaadin-grid-tree-toggle>` is a helper element for the `<vaadin-grid>`
@@ -29,17 +29,22 @@ document.head.appendChild($_documentContainer.content);
  *
  * #### Example:
  * ```html
- * <vaadin-grid-column>
- *   <template class="header">Package name</template>
- *   <template>
- *     <vaadin-grid-tree-toggle
- *         leaf="[[!item.hasChildren]]"
- *         expanded="{{expanded}}"
- *         level="[[level]]">
- *       [[item.name]]
- *     </vaadin-grid-tree-toggle>
- *   </template>
- * </vaadin-grid-column>
+ * <vaadin-grid-column id="column"></vaadin-grid-column>
+ * ```
+ * ```js
+ * const column = document.querySelector('#column');
+ * column.renderer = (root, column, model) => {
+ *   let treeToggle = root.firstElementChild;
+ *   if (!treeToggle) {
+ *     treeToggle = document.createElement('vaadin-grid-tree-toggle');
+ *     treeToggle.addEventListener('expanded-changed', () => { ... });
+ *     root.appendChild(treeToggle);
+ *   }
+ *   treeToggle.leaf = !model.item.hasChildren;
+ *   treeToggle.level = level;
+ *   treeToggle.expanded = expanded;
+ *   treeToggle.textContent = model.item.name;
+ * };
  * ```
  *
  * ### Styling
@@ -69,13 +74,14 @@ document.head.appendChild($_documentContainer.content);
  * @extends HTMLElement
  * @mixes ThemableMixin
  */
-class GridTreeToggleElement extends ThemableMixin(DirMixin(PolymerElement)) {
+class GridTreeToggle extends ThemableMixin(DirMixin(PolymerElement)) {
   static get template() {
     return html`
       <style>
         :host {
           display: inline-flex;
           align-items: baseline;
+          max-width: 100%;
 
           /* CSS API for :host */
           --vaadin-grid-tree-toggle-level-offset: 1em;
@@ -120,6 +126,12 @@ class GridTreeToggleElement extends ThemableMixin(DirMixin(PolymerElement)) {
         :host([leaf]) [part='toggle'] {
           visibility: hidden;
         }
+
+        slot {
+          display: block;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
       </style>
 
       <span id="level-spacer"></span>
@@ -142,7 +154,7 @@ class GridTreeToggleElement extends ThemableMixin(DirMixin(PolymerElement)) {
       level: {
         type: Number,
         value: 0,
-        observer: '_levelChanged'
+        observer: '_levelChanged',
       },
 
       /**
@@ -152,7 +164,7 @@ class GridTreeToggleElement extends ThemableMixin(DirMixin(PolymerElement)) {
       leaf: {
         type: Boolean,
         value: false,
-        reflectToAttribute: true
+        reflectToAttribute: true,
       },
 
       /**
@@ -163,8 +175,8 @@ class GridTreeToggleElement extends ThemableMixin(DirMixin(PolymerElement)) {
         type: Boolean,
         value: false,
         reflectToAttribute: true,
-        notify: true
-      }
+        notify: true,
+      },
     };
   }
 
@@ -195,6 +207,6 @@ class GridTreeToggleElement extends ThemableMixin(DirMixin(PolymerElement)) {
   }
 }
 
-customElements.define(GridTreeToggleElement.is, GridTreeToggleElement);
+customElements.define(GridTreeToggle.is, GridTreeToggle);
 
-export { GridTreeToggleElement };
+export { GridTreeToggle };

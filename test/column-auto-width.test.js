@@ -1,11 +1,12 @@
 import { expect } from '@esm-bundle/chai';
+import { fixtureSync, nextFrame, oneEvent } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { fixtureSync, nextFrame, oneEvent } from '@open-wc/testing-helpers';
-import { flushGrid } from './helpers.js';
 import '../vaadin-grid.js';
+import '../vaadin-grid-column-group.js';
 import '../vaadin-grid-tree-column.js';
+import { flushGrid } from './helpers.js';
 
-describe('column auto-width', function () {
+describe('column auto-width', () => {
   let grid;
   let columns;
   let spy;
@@ -13,7 +14,7 @@ describe('column auto-width', function () {
   const testItems = [
     { a: 'fubar', b: 'foo', c: 'foo', d: 'a' },
     { a: 'foo', b: 'foo bar baz', c: 'foo', d: 'bar' },
-    { a: 'foo', b: 'foo baz', c: 'foo bar', d: 'baz' }
+    { a: 'foo', b: 'foo baz', c: 'foo bar', d: 'baz' },
   ];
 
   function expectColumnWidthsToBeOk(columns, expectedWidths = [71, 114, 84, 107]) {
@@ -67,6 +68,18 @@ describe('column auto-width', function () {
     expectColumnWidthsToBeOk(columns);
   });
 
+  it('should have correct column widths when items are set after setting an empty items array', async () => {
+    // Set an empty items array to the grid
+    grid.items = [];
+    flushGrid(grid);
+
+    // Assign new items with the second one having a long value
+    grid.items = [{ a: 'a' }, { a: 'aaaaaaaa' }];
+    await nextFrame();
+
+    expectColumnWidthsToBeOk(grid.querySelectorAll('vaadin-grid-column'), [101]);
+  });
+
   it('should have correct column widths when the grid is visually scaled', async () => {
     grid.style.transform = 'scale(0.5)';
     grid.items = testItems;
@@ -101,6 +114,18 @@ describe('column auto-width', function () {
     expectColumnWidthsToBeOk(columns);
   });
 
+  it('should have correct column widths once an invisible column is made visible', async () => {
+    grid.items = testItems;
+    columns[1].hidden = true;
+
+    await nextFrame();
+    columns[1].hidden = false;
+    grid.recalculateColumnWidths();
+
+    await recalculateWidths();
+    expectColumnWidthsToBeOk(columns);
+  });
+
   it('should have correct column widths when using renderers', async () => {
     columns[0].renderer = function (root, column, model) {
       root.textContent = model.index;
@@ -112,6 +137,46 @@ describe('column auto-width', function () {
 
     await recalculateWidths();
     expectColumnWidthsToBeOk(columns, [42, 62, 84, 107]);
+  });
+
+  it('should exclude non-visible body cells from grid column auto width calc', async () => {
+    // Assign more items to the grid. The last one with the long content, while in the DOM,
+    // will end up outside the visible viewport and therefore should not affect the
+    // calculated column auto-width
+    grid.items = [...testItems, { a: 'a' }, { a: 'aaaaaaaaaaaaaaaaaaaaa' }];
+
+    await recalculateWidths();
+    expectColumnWidthsToBeOk(columns);
+  });
+});
+
+describe('tree column', () => {
+  let grid;
+
+  beforeEach(() => {
+    grid = fixtureSync(`
+      <vaadin-grid>
+        <vaadin-grid-tree-column auto-width path="name" flex-grow="0"></vaadin-grid-tree-column>
+      </vaadin-grid>
+    `);
+
+    const data = [
+      {
+        name: 'a',
+        children: [
+          {
+            name: 'b',
+          },
+        ],
+      },
+    ];
+    grid.dataProvider = (params, cb) => cb(params.parentItem ? params.parentItem.children : data, 1);
+    grid.expandItem(data[0]);
+    flushGrid(grid);
+  });
+
+  it('should recalculate tree column width correctly', () => {
+    expect(parseInt(grid.firstElementChild.width)).to.be.closeTo(107, 5);
   });
 });
 
@@ -132,10 +197,10 @@ describe('async recalculateWidth columns', () => {
         name: 'foo',
         children: [
           {
-            name: 'bar'
-          }
-        ]
-      }
+            name: 'bar',
+          },
+        ],
+      },
     ];
     grid.dataProvider = (params, cb) => {
       grid._getData = () => cb(params.parentItem ? params.parentItem.children : data, 1);
@@ -149,5 +214,203 @@ describe('async recalculateWidth columns', () => {
     grid._getData();
     flushGrid(grid);
     expect(grid._recalculateColumnWidths.called).to.be.true;
+  });
+});
+
+describe('column group', () => {
+  const num = (str) => parseInt(str, 10);
+
+  function expectColumnsWidthToBeOk(grid, ws, delta = 5) {
+    const columns = grid.querySelectorAll('vaadin-grid-column');
+
+    Array.from(columns).forEach((col, i) => {
+      const columnWidth = num(col.width);
+      expect(columnWidth).to.be.closeTo(ws[i], delta);
+    });
+  }
+
+  function createGrid(html, items = [{ a: 'm', b: 'mm' }]) {
+    const grid = fixtureSync(html);
+    grid.items = items;
+    flushGrid(grid);
+
+    return grid;
+  }
+
+  it('should consider column group when calculating column width', () => {
+    const grid = createGrid(`
+      <vaadin-grid style="width: 200px">
+        <vaadin-grid-column-group header="a lengthy header that should change the width of the column">
+          <vaadin-grid-column auto-width path="a" header="small header"></vaadin-grid-column>
+        </vaadin-grid-column-group>
+      </vaadin-grid>
+    `);
+    expectColumnsWidthToBeOk(grid, [420], 25);
+  });
+
+  it('should distribute the excess space to all columns', () => {
+    const grid = createGrid(`
+      <vaadin-grid style="width: 200px">
+        <vaadin-grid-column-group header="a lengthy header that should change the width of the column">
+          <vaadin-grid-column auto-width path="a" header="small header"></vaadin-grid-column>
+          <vaadin-grid-column auto-width path="b" header="small header"></vaadin-grid-column>
+        </vaadin-grid-column-group>
+      </vaadin-grid>
+    `);
+
+    expectColumnsWidthToBeOk(grid, [217, 217], 20);
+  });
+
+  it('should distribute the extra necessary space to all columns regardless of flexGrow', () => {
+    const items = [{ first: 'fff', last: 'lll' }];
+
+    const grid = createGrid(
+      `
+        <vaadin-grid style="width: 200px">
+          <vaadin-grid-column-group header="HeaderHeaderHeaderHeaderHeaderHeaderHeaderHeaderHeaderHeader">
+            <vaadin-grid-column auto-width path="first"></vaadin-grid-column>
+            <vaadin-grid-column auto-width path="last"></vaadin-grid-column>
+          </vaadin-grid-column-group>
+        </vaadin-grid>
+      `,
+      items,
+    );
+
+    const gridWithFlexGrow = createGrid(
+      `
+        <vaadin-grid style="width: 200px">
+          <vaadin-grid-column-group header="HeaderHeaderHeaderHeaderHeaderHeaderHeaderHeaderHeaderHeader">
+            <vaadin-grid-column auto-width flex-grow="3" path="first"></vaadin-grid-column>
+            <vaadin-grid-column auto-width path="last"></vaadin-grid-column>
+          </vaadin-grid-column-group>
+        </vaadin-grid>
+      `,
+      items,
+    );
+
+    const [columnA, columnB] = grid.querySelectorAll('vaadin-grid-column');
+    const [columnA2, columnB2] = gridWithFlexGrow.querySelectorAll('vaadin-grid-column');
+
+    expect(columnA.width).to.equal(columnA2.width);
+    expect(columnB.width).to.equal(columnB2.width);
+  });
+
+  it('should distribute the excess space to all columns according to their initial width', () => {
+    const grid = createGrid(`
+      <vaadin-grid style="width: 200px">
+        <vaadin-grid-column-group header="a lengthy header that should change the width of the column">
+          <vaadin-grid-column auto-width path="a" header="header"></vaadin-grid-column>
+          <vaadin-grid-column auto-width path="b" header="headerheader"></vaadin-grid-column>
+        </vaadin-grid-column-group>
+      </vaadin-grid>
+    `);
+
+    const [columnA, columnB] = grid.querySelectorAll('vaadin-grid-column');
+    expect(num(columnB.width)).to.be.greaterThan(num(columnA.width));
+  });
+
+  it('should consider all the parent vaadin-grid-column-groups when calculating the necessary width', () => {
+    const grid = createGrid(`
+      <vaadin-grid style="width: 200px">
+        <vaadin-grid-column-group header="a lengthy header, greater than immediate column-group">
+          <vaadin-grid-column-group header="immediate column-group">
+            <vaadin-grid-column auto-width path="a" header="header"></vaadin-grid-column>
+          </vaadin-grid-column-group>
+        </vaadin-grid-column-group>
+      </vaadin-grid>
+    `);
+    expectColumnsWidthToBeOk(grid, [403], 30);
+  });
+
+  it('should consider vaadin-grid-column header when calculating column width', () => {
+    const grid = createGrid(`
+      <vaadin-grid style="width: 200px">
+        <vaadin-grid-column-group header="small header">
+          <vaadin-grid-column auto-width path="a" header="a lengthy header that should change the width of the column"></vaadin-grid-column>
+        </vaadin-grid-column-group>
+      </vaadin-grid>
+    `);
+    expectColumnsWidthToBeOk(grid, [420], 25);
+  });
+
+  it('should consider vaadin-grid-column-group footer when calculating column width', () => {
+    const grid = createGrid(`
+      <vaadin-grid style="width: 200px">
+        <vaadin-grid-column-group>
+          <vaadin-grid-column auto-width path="a" header="header"></vaadin-grid-column>
+        </vaadin-grid-column-group>
+      </vaadin-grid>
+    `);
+
+    const columnGroup = document.querySelector('vaadin-grid-column-group');
+    const column = document.querySelector('vaadin-grid-column');
+
+    columnGroup.footerRenderer = (root) => {
+      const footer = document.createElement('footer');
+      footer.textContent = 'group footer';
+      footer.style.width = '300px';
+
+      root.appendChild(footer);
+    };
+
+    column.footerRenderer = (root) => {
+      const footer = document.createElement('footer');
+      footer.textContent = 'column footer';
+      root.appendChild(footer);
+    };
+
+    grid.recalculateColumnWidths();
+    expectColumnsWidthToBeOk(grid, [333]);
+  });
+
+  it('should consider vaadin-grid-column footer when calculating column width', () => {
+    const grid = createGrid(`
+      <vaadin-grid style="width: 200px">
+        <vaadin-grid-column-group>
+          <vaadin-grid-column auto-width path="a" header="header"></vaadin-grid-column>
+        </vaadin-grid-column-group>
+      </vaadin-grid>
+    `);
+
+    const columnGroup = document.querySelector('vaadin-grid-column-group');
+    const column = document.querySelector('vaadin-grid-column');
+
+    columnGroup.footerRenderer = (root) => {
+      const footer = document.createElement('footer');
+      footer.textContent = 'group footer';
+      root.appendChild(footer);
+    };
+
+    column.footerRenderer = (root) => {
+      const footer = document.createElement('footer');
+      footer.textContent = 'footer';
+      footer.style.width = '300px';
+
+      root.appendChild(footer);
+    };
+
+    grid.recalculateColumnWidths();
+    expectColumnsWidthToBeOk(grid, [333]);
+  });
+
+  it('should not error when there is no vaadin-grid-column-group', () => {
+    const grid = createGrid(`
+      <vaadin-grid style="width: 200px">
+        <vaadin-grid-column auto-width path="a" header="header"></vaadin-grid-column>
+      </vaadin-grid>
+    `);
+
+    const column = document.querySelector('vaadin-grid-column');
+
+    column.footerRenderer = (root) => {
+      const footer = document.createElement('footer');
+      footer.textContent = 'footer';
+      footer.style.width = '300px';
+
+      root.appendChild(footer);
+    };
+
+    grid.recalculateColumnWidths();
+    expectColumnsWidthToBeOk(grid, [333]);
   });
 });

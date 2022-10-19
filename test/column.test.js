@@ -1,19 +1,20 @@
 import { expect } from '@esm-bundle/chai';
+import { fixtureSync, nextFrame, nextRender } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { fixtureSync, nextFrame } from '@open-wc/testing-helpers';
-import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
+import '../vaadin-grid.js';
+import '../vaadin-grid-column-group.js';
+import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
 import {
-  flushColumns,
   flushGrid,
   getBodyCellContent,
   getCellContent,
   getContainerCell,
   getContainerCellContent,
   getHeaderCellContent,
-  infiniteDataProvider
+  getPhysicalItems,
+  infiniteDataProvider,
 } from './helpers.js';
-import '../vaadin-grid.js';
-import '../vaadin-grid-column-group.js';
 
 class GridContainer extends PolymerElement {
   static get template() {
@@ -64,7 +65,7 @@ describe('column', () => {
 
         const header = grid.$.header;
 
-        expect(getContainerCell(header, 0, 0).style.flexGrow).to.eql('3'); // colspan 2 + 1
+        expect(getContainerCell(header, 0, 0).style.flexGrow).to.eql('3'); // Colspan 2 + 1
         expect(getContainerCell(header, 1, 0).style.flexGrow).to.eql('2');
       });
 
@@ -107,8 +108,8 @@ describe('column', () => {
     });
 
     describe('hidden', () => {
-      it('should default to undefined', () => {
-        expect(column.hidden).to.eql(undefined);
+      it('should default to false', () => {
+        expect(column.hidden).to.be.false;
       });
 
       it('should not be bound to column-group header cells', () => {
@@ -146,26 +147,37 @@ describe('column', () => {
         expect(column._footerCell.parentElement).to.be.not.ok;
       });
 
-      it('should notify resize', () => {
-        const spy = sinon.spy(grid, 'notifyResize');
-        column.hidden = true;
-        expect(spy.callCount).to.equal(1);
-        column.hidden = false;
-        expect(spy.callCount).to.equal(2);
-      });
-
-      it('should not notify resize', () => {
-        const spy = sinon.spy(grid, 'notifyResize');
-        expect(column.hidden).to.be.undefined;
-        column.hidden = false;
-        expect(spy.called).to.be.false;
-      });
-
       it('should detach cells from a hidden column', () => {
         const childCountBefore = grid.childElementCount;
         column.hidden = true;
         const childCountAfter = grid.childElementCount;
         expect(childCountAfter).to.be.below(childCountBefore);
+      });
+
+      it('should update the structure of hidden rows', async () => {
+        // Reduce the size so we end up with hidden rows
+        grid.size = 1;
+
+        // Detach grid from its parent
+        const parentNode = grid.parentNode;
+        parentNode.removeChild(grid);
+
+        // Remove a column
+        column.parentNode.removeChild(column);
+
+        // Increase the size so one of the hidden rows becomes visible again
+        grid.size = 2;
+        flushGrid(grid);
+
+        // Re-attach the grid
+        parentNode.appendChild(grid);
+
+        await nextFrame();
+        flushGrid(grid);
+
+        // Expect the two rows (the second one was hidden) to have the same amount of cells
+        const rows = getPhysicalItems(grid);
+        expect(rows[1].childElementCount).to.equal(rows[0].childElementCount);
       });
 
       it('should not throw on render with initially hidden columns with header/footerRenderer', () => {
@@ -175,11 +187,13 @@ describe('column', () => {
         newColumn.footerRenderer = () => {};
         grid.appendChild(newColumn);
         flushGrid(grid);
-        expect(() => grid.render()).not.to.throw(Error);
+        expect(() => grid.requestContentUpdate()).not.to.throw(Error);
       });
 
       it('should not remove details row when a column is hidden', () => {
-        grid.rowDetailsRenderer = (root) => (root.textContent = 'row-details');
+        grid.rowDetailsRenderer = (root) => {
+          root.textContent = 'row-details';
+        };
         grid.detailsOpenedItems = [grid._cache.items[0]];
         column.hidden = true;
         flushGrid(grid);
@@ -190,7 +204,9 @@ describe('column', () => {
       it('should not throw error when adding a new row with a hidden column', () => {
         column.hidden = true;
         flushGrid(grid);
-        expect(() => (grid.size = 11)).to.not.throw(Error);
+        expect(() => {
+          grid.size = 11;
+        }).to.not.throw(Error);
       });
     });
 
@@ -214,23 +230,27 @@ describe('column', () => {
       });
 
       it('should not override header renderer content', () => {
-        emptyColumn.headerRenderer = (root) => (root.textContent = 'foo');
+        emptyColumn.headerRenderer = (root) => {
+          root.textContent = 'foo';
+        };
         emptyColumn.path = 'foo';
         expect(getHeaderCellContent(grid, 1, 2).textContent.trim()).to.equal('foo');
       });
 
-      it('should not override header template content', () => {
+      it('should not override header template content', async () => {
         const template = document.createElement('template');
         template.innerHTML = 'foo';
         template.classList.add('header');
         emptyColumn.appendChild(template);
-        flushColumns(grid);
+        await nextRender();
         emptyColumn.path = 'bar';
         expect(getHeaderCellContent(grid, 1, 2).textContent.trim()).to.equal('foo');
       });
 
       it('should use path generated header if header renderer is removed', () => {
-        emptyColumn.headerRenderer = (root) => (root.textContent = 'foo');
+        emptyColumn.headerRenderer = (root) => {
+          root.textContent = 'foo';
+        };
         emptyColumn.headerRenderer = null;
         expect(getHeaderCellContent(grid, 1, 2).textContent.trim()).to.equal('Value');
       });
@@ -244,22 +264,26 @@ describe('column', () => {
       });
 
       it('should not override renderer content', () => {
-        emptyColumn.renderer = (root) => (root.textContent = 'foo');
+        emptyColumn.renderer = (root) => {
+          root.textContent = 'foo';
+        };
         emptyColumn.path = 'foo';
         expect(getBodyCellContent(grid, 0, 2).textContent.trim()).to.equal('foo');
       });
 
-      it('should not override template content', () => {
+      it('should not override template content', async () => {
         const template = document.createElement('template');
         template.innerHTML = 'foo';
         emptyColumn.path = 'foo';
         emptyColumn.appendChild(template);
-        flushColumns(grid);
+        await nextRender();
         expect(getBodyCellContent(grid, 0, 2).textContent.trim()).to.equal('foo');
       });
 
       it('should use path if renderer is removed', () => {
-        emptyColumn.renderer = (root) => (root.textContent = 'foo');
+        emptyColumn.renderer = (root) => {
+          root.textContent = 'foo';
+        };
         emptyColumn.renderer = null;
         expect(getBodyCellContent(grid, 0, 2).textContent.trim()).to.equal('foo0');
       });
@@ -282,7 +306,7 @@ describe('column', () => {
           set: spy,
           get: () => {
             return spy.called ? spy.getCalls().pop().args[0] : '';
-          }
+          },
         });
         emptyColumn.path = 'value';
         await nextFrame();
@@ -296,7 +320,7 @@ describe('column', () => {
           set: spy,
           get: () => {
             return spy.called ? spy.getCalls().pop().args[0] : '';
-          }
+          },
         });
         emptyColumn.path = 'header';
         const callCount = spy.callCount;
@@ -316,17 +340,19 @@ describe('column', () => {
       });
 
       it('should not override header renderer text content', () => {
-        emptyColumn.headerRenderer = (root) => (root.textContent = 'foo');
+        emptyColumn.headerRenderer = (root) => {
+          root.textContent = 'foo';
+        };
         emptyColumn.header = 'Bar';
         expect(getHeaderCellContent(grid, 1, 2).textContent.trim()).to.equal('foo');
       });
 
-      it('should not override header template text content', () => {
+      it('should not override header template text content', async () => {
         const template = document.createElement('template');
         template.innerHTML = 'foo';
         template.classList.add('header');
         emptyColumn.appendChild(template);
-        flushColumns(grid);
+        await nextRender();
         emptyColumn.header = 'Bar';
         expect(getHeaderCellContent(grid, 1, 2).textContent.trim()).to.equal('foo');
       });
@@ -383,7 +409,7 @@ describe('column', () => {
           set: spy,
           get: () => {
             return spy.called ? spy.getCalls().pop().args[0] : '';
-          }
+          },
         });
         emptyColumn.header = undefined;
         emptyColumn.path = 'foo';
@@ -458,98 +484,66 @@ describe('column', () => {
   });
 
   describe('dom observing', () => {
-    it('should pickup header template', () => {
-      const column = document.createElement('vaadin-grid-column');
-      const template = document.createElement('template');
-      template.classList.add('header');
+    let grid, column;
 
-      column.appendChild(template);
-      column._templateObserver.flush();
+    beforeEach(() => {
+      grid = fixtureSync(`
+        <vaadin-grid>
+          <vaadin-grid-column></vaadin-grid-column>
+        </vaadin-grid>
+      `);
 
-      expect(column._headerTemplate).to.eql(template);
+      grid.items = ['item1', 'item2'];
+      column = grid.firstElementChild;
+
+      flushGrid(grid);
     });
 
-    it('should pickup footer template', () => {
-      const column = document.createElement('vaadin-grid-column');
-      const template = document.createElement('template');
-      template.classList.add('footer');
+    ['header', 'body', 'footer'].forEach((templateName) => {
+      let cell;
 
-      column.appendChild(template);
-      column._templateObserver.flush();
+      beforeEach(() => {
+        if (templateName === 'header') {
+          cell = getContainerCell(grid.$.header, 0, 0);
+        }
+        if (templateName === 'footer') {
+          cell = getContainerCell(grid.$.footer, 0, 0);
+        }
+        if (templateName === 'body') {
+          cell = getContainerCell(grid.$.items, 0, 0);
+        }
+      });
 
-      expect(column._footerTemplate).to.eql(template);
-    });
+      it(`should observe for adding ${templateName} templates`, async () => {
+        const template = fixtureSync(`
+          <template class="${templateName}">content</template>
+        `);
 
-    it('should pickup body template', () => {
-      const column = document.createElement('vaadin-grid-column');
-      const template = document.createElement('template');
+        column.appendChild(template);
+        await nextRender();
 
-      column.appendChild(template);
-      column._templateObserver.flush();
+        expect(cell._content.textContent).to.equal('content');
+      });
 
-      expect(column._bodyTemplate).to.eql(template);
-    });
+      it(`should observe for replacing ${templateName} templates`, async () => {
+        const template1 = fixtureSync(`
+          <template class="${templateName}">content1</template>
+        `);
+        const template2 = fixtureSync(`
+          <template class="${templateName}">content2</template>
+        `);
 
-    it('should re-pickup header template', () => {
-      const column = document.createElement('vaadin-grid-column');
-      const template = document.createElement('template');
-      template.classList.add('header');
-      const template2 = document.createElement('template');
-      template2.classList.add('header');
+        column.appendChild(template1);
+        await nextRender();
 
-      column.appendChild(template);
-      column._templateObserver.flush();
-      column.removeChild(template);
-      column.appendChild(template2);
-      column._templateObserver.flush();
-      expect(column._headerTemplate).to.eql(template2);
-    });
+        expect(cell._content.textContent).to.equal('content1');
 
-    it('should pickup new body template', () => {
-      const column = document.createElement('vaadin-grid-column');
-      const template = document.createElement('template');
-      const template2 = document.createElement('template');
+        column.removeChild(template1);
+        column.appendChild(template2);
+        await nextRender();
 
-      column.appendChild(template);
-      column._templateObserver.flush();
-      column.removeChild(template);
-      column.appendChild(template2);
-      column._templateObserver.flush();
-
-      expect(column._bodyTemplate).to.eql(template2);
-    });
-
-    it('should prepare template when added lazily', () => {
-      const column = document.createElement('vaadin-grid-column');
-      const template = document.createElement('template');
-
-      column.appendChild(template);
-      column._templateObserver.flush();
-
-      grid.appendChild(column);
-      grid._observer.flush();
-
-      expect(template.templatizer.template).to.eql(template);
-      expect(column._bodyTemplate).to.eql(template);
-    });
-
-    it('should prepare a new template when added lazily', () => {
-      const column = document.createElement('vaadin-grid-column');
-      const template = document.createElement('template');
-      const template2 = document.createElement('template');
-
-      column.appendChild(template);
-      column._templateObserver.flush();
-
-      grid.appendChild(column);
-      grid._observer.flush();
-
-      column.removeChild(template);
-      column.appendChild(template2);
-      column._templateObserver.flush();
-
-      expect(template2.templatizer.template).to.eql(template2);
-      expect(column._bodyTemplate).to.eql(template2);
+        expect(cell._content.textContent).to.equal('content2');
+      });
     });
   });
 
@@ -558,7 +552,37 @@ describe('column', () => {
     expect(column.isConnected).to.be.true;
     column.remove();
     expect(column.isConnected).to.be.false;
-    expect(() => (grid.size = 11)).not.to.throw();
+    expect(() => {
+      grid.size = 11;
+    }).not.to.throw();
     expect(grid.size).to.equal(11);
+  });
+});
+
+describe('column - simple grid', () => {
+  let grid, column;
+
+  beforeEach(async () => {
+    grid = fixtureSync(`
+      <vaadin-grid>
+        <vaadin-grid-column path="value"></vaadin-grid-column>
+      </vaadin-grid>
+    `);
+    column = grid.querySelector('vaadin-grid-column');
+    grid.size = 1;
+    grid.dataProvider = infiniteDataProvider;
+    await nextFrame();
+  });
+
+  it('should have intact cell structure after changing size and column visibility', async () => {
+    column.hidden = true;
+    await nextFrame();
+
+    column.hidden = false;
+    grid.size = 2;
+    await nextFrame();
+
+    expect(getBodyCellContent(grid, 0, 0).textContent.trim()).to.equal('foo0');
+    expect(getBodyCellContent(grid, 1, 0).textContent.trim()).to.equal('foo1');
   });
 });

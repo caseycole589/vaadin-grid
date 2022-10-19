@@ -1,12 +1,19 @@
-import { GridCellClassNameGenerator } from './interfaces';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { Constructor } from '@open-wc/dedupe-mixin';
+import type { GridItemModel } from './vaadin-grid.js';
+import type { GridColumn } from './vaadin-grid-column.js';
 
-declare function StylingMixin<T extends new (...args: any[]) => {}>(base: T): T & StylingMixinConstructor;
+export type GridCellClassNameGenerator<TItem> = (column: GridColumn<TItem>, model: GridItemModel<TItem>) => string;
 
-interface StylingMixinConstructor {
-  new (...args: any[]): StylingMixin;
-}
+export declare function StylingMixin<TItem, T extends Constructor<HTMLElement>>(
+  base: T,
+): Constructor<StylingMixinClass<TItem>> & T;
 
-interface StylingMixin {
+export declare class StylingMixinClass<TItem> {
   /**
    * A function that allows generating CSS class names for grid cells
    * based on their row and column. The return value should be the generated
@@ -23,7 +30,7 @@ interface StylingMixin {
    *   - `model.level` Level of the tree represented with a horizontal offset of the toggle button.
    *   - `model.selected` Selected state.
    */
-  cellClassNameGenerator: GridCellClassNameGenerator | null | undefined;
+  cellClassNameGenerator: GridCellClassNameGenerator<TItem> | null | undefined;
 
   /**
    * Runs the `cellClassNameGenerator` for the visible cells.
@@ -33,5 +40,3 @@ interface StylingMixin {
    */
   generateCellClassNames(): void;
 }
-
-export { StylingMixin, StylingMixinConstructor };

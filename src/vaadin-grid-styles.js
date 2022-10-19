@@ -1,9 +1,9 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
-import { registerStyles, css } from '@vaadin/vaadin-themable-mixin/register-styles.js';
+import { css, registerStyles } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
 
 registerStyles(
   'vaadin-grid',
@@ -27,6 +27,10 @@ registerStyles(
       display: none !important;
     }
 
+    :host([disabled]) {
+      pointer-events: none;
+    }
+
     #scroller {
       display: block;
       transform: translateY(0);
@@ -39,17 +43,21 @@ registerStyles(
       left: 0;
     }
 
-    :host([height-by-rows]) {
+    :host([all-rows-visible]) {
       height: auto;
       align-self: flex-start;
       flex-grow: 0;
       width: 100%;
     }
 
-    :host([height-by-rows]) #scroller {
+    :host([all-rows-visible]) #scroller {
       width: 100%;
       height: 100%;
       position: relative;
+    }
+
+    :host([all-rows-visible]) #items {
+      min-height: 1px;
     }
 
     #table {
@@ -119,7 +127,7 @@ registerStyles(
     }
 
     #items [part~='row']:empty {
-      height: 1em;
+      height: 100%;
     }
 
     [part~='cell']:not([part~='details-cell']) {
@@ -154,7 +162,8 @@ registerStyles(
       display: none !important;
     }
 
-    [frozen] {
+    [frozen],
+    [frozen-to-end] {
       z-index: 2;
       will-change: transform;
     }
@@ -211,6 +220,26 @@ registerStyles(
       width: 18px;
       transform: none;
       right: 0;
+    }
+
+    [frozen-to-end] [part~='resize-handle'] {
+      left: 0;
+      right: auto;
+    }
+
+    [frozen-to-end] [part~='resize-handle']::before {
+      left: 0;
+      right: auto;
+    }
+
+    [first-frozen-to-end] [part~='resize-handle']::before {
+      width: 18px;
+      transform: none;
+    }
+
+    /* Hide resize handle if scrolled to end */
+    :host(:not([overflow~='end'])) [first-frozen-to-end] [part~='resize-handle'] {
+      display: none;
     }
 
     #scroller[column-resizing] {
@@ -281,6 +310,16 @@ registerStyles(
       left: 0;
       right: auto;
     }
+
+    :host([dir='rtl']) [frozen-to-end] [part~='resize-handle'] {
+      right: 0;
+      left: auto;
+    }
+
+    :host([dir='rtl']) [frozen-to-end] [part~='resize-handle']::before {
+      right: 0;
+      left: auto;
+    }
   `,
-  { moduleId: 'vaadin-grid-styles' }
+  { moduleId: 'vaadin-grid-styles' },
 );

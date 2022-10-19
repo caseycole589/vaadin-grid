@@ -1,10 +1,11 @@
 import { expect } from '@esm-bundle/chai';
+import { click, fixtureSync, nextFrame } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { fixtureSync, nextFrame } from '@open-wc/testing-helpers';
-import { click, flushGrid, getCellContent, getRows, getRowCells } from './helpers.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
 import '../vaadin-grid.js';
 import '../vaadin-grid-filter.js';
 import '../vaadin-grid-sorter.js';
+import { flushGrid, getBodyCellContent, getCellContent, getRowCells, getRows } from './helpers.js';
 
 describe('array data provider', () => {
   let grid, body;
@@ -35,15 +36,15 @@ describe('array data provider', () => {
         {
           name: {
             first: 'foo',
-            last: 'bar'
-          }
+            last: 'bar',
+          },
         },
         {
           name: {
             first: 'baz',
-            last: 'qux'
-          }
-        }
+            last: 'qux',
+          },
+        },
       ];
       flushGrid(grid);
       body = grid.$.items;
@@ -64,8 +65,8 @@ describe('array data provider', () => {
       grid.unshift('items', {
         name: {
           first: 'a',
-          last: 'b'
-        }
+          last: 'b',
+        },
       });
       expect(grid.size).to.equal(3);
       expect(getContent(0, 0)).to.equal('a');
@@ -79,30 +80,37 @@ describe('array data provider', () => {
     it('should handle null', () => {
       grid.items = null;
       expect(grid.size).to.equal(0);
+      expect(grid.items).to.be.null;
+    });
+
+    it('should unset the data provider', () => {
+      grid.items = null;
+      flushGrid(grid);
+      expect(grid.dataProvider).to.be.undefined;
     });
 
     it('should set array data provider', () => {
       expect(grid.dataProvider).to.equal(grid._arrayDataProvider);
     });
 
-    it('should not override custom data provider', () => {
+    it('should override custom data provider', () => {
       const ds = (grid.dataProvider = () => {});
       grid.items = [1, 2, 3];
-      expect(grid.dataProvider).to.equal(ds);
+      expect(grid.dataProvider).not.to.equal(ds);
     });
 
     it('should handle new array of same length', () => {
       grid.items = [
         {
           name: {
-            first: 'a'
-          }
+            first: 'a',
+          },
         },
         {
           name: {
-            first: 'b'
-          }
-        }
+            first: 'b',
+          },
+        },
       ];
       expect(getContent(0, 0)).to.equal('a');
     });
@@ -164,9 +172,9 @@ describe('invalid paths', () => {
       {
         name: {
           first: 'foo',
-          last: 'bar'
-        }
-      }
+          last: 'bar',
+        },
+      },
     ];
     flushGrid(grid);
   });
@@ -209,10 +217,10 @@ describe('invalid paths', () => {
         {
           name: {
             last: {
-              foo: 'foo'
-            }
-          }
-        }
+              foo: 'foo',
+            },
+          },
+        },
       ];
 
       sorter.path = 'name.last.foo';
@@ -247,5 +255,34 @@ describe('invalid paths', () => {
       filter._debouncerFilterChanged.flush();
       expect(console.warn.called).to.be.false;
     });
+  });
+});
+
+describe('items with a custom data provider', () => {
+  let grid;
+  const dataProvider = (params, callback) => callback([{ value: 'foo' }], 1);
+  const items = [{ value: 'bar' }];
+
+  beforeEach(() => {
+    grid = fixtureSync(`
+      <vaadin-grid>
+        <vaadin-grid-column path="value"></vaadin-grid-column>
+      </vaadin-grid>
+    `);
+  });
+
+  it('should use the items array', () => {
+    grid.dataProvider = dataProvider;
+    grid.items = items;
+    flushGrid(grid);
+    expect(getBodyCellContent(grid, 0, 0).textContent).to.equal('bar');
+  });
+
+  it('should use the custom data provider', () => {
+    grid.items = items;
+    grid.dataProvider = dataProvider;
+    flushGrid(grid);
+    expect(getBodyCellContent(grid, 0, 0).textContent).to.equal('foo');
+    expect(grid.items).to.be.undefined;
   });
 });

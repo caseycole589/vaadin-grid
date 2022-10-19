@@ -1,18 +1,21 @@
 import { expect } from '@esm-bundle/chai';
+import { aTimeout, fixtureSync, oneEvent } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { aTimeout, fixtureSync } from '@open-wc/testing-helpers';
-import { afterNextRender } from '@polymer/polymer/lib/utils/render-status.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
+import '../vaadin-grid.js';
 import {
   flushGrid,
   getBodyCellContent,
   getCell,
   getCellContent,
   getFirstVisibleItem,
+  getLastVisibleItem,
+  getPhysicalAverage,
+  getPhysicalItems,
   infiniteDataProvider,
-  scrollToEnd
+  scrollGrid,
+  scrollToEnd,
 } from './helpers.js';
-import '@polymer/iron-list/iron-list.js';
-import '../vaadin-grid.js';
 
 describe('basic features', () => {
   let grid;
@@ -29,44 +32,6 @@ describe('basic features', () => {
     flushGrid(grid);
   });
 
-  describe('toggle attribute', () => {
-    let node;
-
-    beforeEach(() => {
-      node = {};
-      node.setAttribute = sinon.spy();
-      node.removeAttribute = sinon.spy();
-    });
-
-    it('should set attribute', () => {
-      node.hasAttribute = () => false;
-      grid._toggleAttribute('foo', true, node);
-      expect(node.setAttribute.called).to.be.true;
-    });
-
-    it('should not re-set attribute', () => {
-      node.hasAttribute = () => true;
-      grid._toggleAttribute('foo', true, node);
-      expect(node.setAttribute.called).to.be.false;
-    });
-
-    it('should remove attribute', () => {
-      node.hasAttribute = () => true;
-      grid._toggleAttribute('foo', false, node);
-      grid._toggleAttribute('foo', '', node);
-      grid._toggleAttribute('foo', undefined, node);
-      expect(node.removeAttribute.callCount).to.equal(3);
-    });
-
-    it('should not re-remove attribute', () => {
-      node.hasAttribute = () => false;
-      grid._toggleAttribute('foo', false, node);
-      grid._toggleAttribute('foo', '', node);
-      grid._toggleAttribute('foo', undefined, node);
-      expect(node.removeAttribute.called).to.be.false;
-    });
-  });
-
   it('should notify `size` property', () => {
     const spy = sinon.spy();
     grid.addEventListener('size-changed', spy);
@@ -74,26 +39,11 @@ describe('basic features', () => {
     expect(spy.calledOnce).to.be.true;
   });
 
-  it('should not warn on init', (done) => {
-    const warn = sinon.stub(console, 'warn');
-    const func = grid._warnPrivateAPIAccess;
-    sinon.stub(grid, '_warnPrivateAPIAccess').callsFake((a) => {
-      func.bind(grid)(a);
-      afterNextRender(grid, () => {
-        if (!done._called) {
-          done._called = true;
-          warn.restore();
-          expect(warn.called).to.be.false;
-          done();
-        }
-      });
-    });
-  });
-
   it('check physical item heights', () => {
-    const rowHeight = grid._physicalItems[0].offsetHeight;
-
-    grid._physicalItems.forEach((item) => expect(item.offsetHeight).to.be.closeTo(rowHeight, 1));
+    const physicalItems = getPhysicalItems(grid);
+    const rowHeight = physicalItems[0].offsetHeight;
+    expect(rowHeight).to.be.above(0);
+    physicalItems.forEach((item) => expect(item.offsetHeight).to.be.closeTo(rowHeight, 1));
   });
 
   it('check visible item count', () => {
@@ -102,17 +52,17 @@ describe('basic features', () => {
     expect(grid.shadowRoot.querySelectorAll('tbody tr:not([hidden])').length).to.eql(10);
   });
 
-  it('first visible index', () => {
-    expect(grid.firstVisibleIndex).to.equal(0);
-    grid.scroll(0, grid._physicalAverage * 50);
-    grid._scrollHandler();
-    expect(grid.firstVisibleIndex).to.equal(50);
+  it('first visible item', () => {
+    expect(getFirstVisibleItem(grid).index).to.equal(0);
+    scrollGrid(grid, 0, getPhysicalAverage(grid) * 50);
+    flushGrid(grid);
+    expect(getFirstVisibleItem(grid).index).to.equal(50);
   });
 
   it('last visible index', () => {
-    const actualHeight = grid._physicalAverage;
-    grid._scrollToIndex(2);
-    expect(grid.lastVisibleIndex, Math.ceil((grid._scrollTop + grid.offsetHeight) / actualHeight - 1));
+    const physicalAverage = getPhysicalAverage(grid);
+    const lastIndex = Math.floor(grid.offsetHeight / physicalAverage);
+    expect(getLastVisibleItem(grid).index).to.equal(lastIndex);
   });
 
   it('should change the opacity of cell content in loading rows from 1 to 0 and back', () => {
@@ -133,42 +83,44 @@ describe('basic features', () => {
   it('scroll to index', () => {
     grid.size = 100;
 
-    grid._scrollToIndex(30);
-    expect(grid.firstVisibleIndex).to.equal(30);
+    grid.scrollToIndex(30);
+    expect(getFirstVisibleItem(grid).index).to.equal(30);
 
-    grid._scrollToIndex(0);
-    expect(grid.firstVisibleIndex).to.equal(0);
+    grid.scrollToIndex(0);
+    expect(getFirstVisibleItem(grid).index).to.equal(0);
 
-    grid._scrollToIndex(99);
+    grid.scrollToIndex(99);
 
     const rowHeight = getFirstVisibleItem(grid).offsetHeight;
     const viewportHeight = grid.offsetHeight;
     const itemsPerViewport = viewportHeight / rowHeight;
 
-    expect(grid.firstVisibleIndex, Math.floor(grid.size - itemsPerViewport));
-    grid._scrollToIndex(0);
-    // make the height of the viewport same as the height of the row
+    expect(getFirstVisibleItem(grid).index, Math.floor(grid.size - itemsPerViewport));
+    grid.scrollToIndex(0);
+    // Make the height of the viewport same as the height of the row
     // and scroll to the last item
-    grid.style.height = grid._physicalItems[0].offsetHeight - 2 + 'px';
-    grid.notifyResize();
-    grid._scrollToIndex(99);
-    expect(grid.firstVisibleIndex).to.equal(99);
+    grid.style.height = `${getPhysicalItems(grid)[0].offsetHeight - 2}px`;
+
+    flushGrid(grid);
+
+    grid.scrollToIndex(99);
+    expect(getFirstVisibleItem(grid).index).to.equal(99);
   });
 
   it('scroll to top', () => {
-    grid._scrollToIndex(99);
-    grid.scroll(0, 0);
-    expect(grid._scrollTop).to.equal(0);
+    grid.scrollToIndex(99);
+    scrollGrid(grid, 0, 0);
+    expect(grid.$.table.scrollTop).to.equal(0);
   });
 
   it('scroll to a given scrollTop', () => {
-    grid._scrollToIndex(99);
-    grid.scroll(0, 500);
+    grid.scrollToIndex(99);
+    scrollGrid(grid, 0, 500);
     expect(grid.$.table.scrollTop).to.equal(500);
   });
 
   it('should not scroll when size changes', () => {
-    grid._scrollToIndex(99);
+    grid.scrollToIndex(99);
     const top = grid.$.table.scrollTop;
 
     grid.size += 1;
@@ -192,9 +144,9 @@ describe('basic features', () => {
   it('reorder rows', () => {
     grid.size = 1000;
     [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144].forEach((steps) => {
-      grid.$.table.scrollTop = 5000 + grid._physicalAverage * steps;
-      grid._scrollHandler();
-      grid._debounceScrolling.flush();
+      grid.$.table.scrollTop = 5000 + getPhysicalAverage(grid) * steps;
+      flushGrid(grid);
+
       // Expect the physical rows to be in order after scrolling
       const rows = grid.$.items.querySelectorAll('tr');
 
@@ -211,9 +163,8 @@ describe('basic features', () => {
     const wrappers = grid.querySelectorAll('vaadin-grid-cell-content');
 
     [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144].forEach((steps) => {
-      grid.$.table.scrollTop = 5000 + grid._physicalAverage * steps;
-      grid._scrollHandler();
-      grid._debounceScrolling.flush();
+      grid.$.table.scrollTop = 5000 + getPhysicalAverage(grid) * steps;
+      flushGrid(grid);
 
       const newWrappers = grid.querySelectorAll('vaadin-grid-cell-content');
       // Expect the light dom order unchanged
@@ -241,18 +192,9 @@ describe('basic features', () => {
     getCell(grid, 10).focus();
     [1, 1, 2, 3, 5, 8, 13, 21, 34, 55, 89, 144].forEach((steps) => {
       const activeElement = grid.shadowRoot.activeElement;
-      grid.$.table.scrollTop = 5000 + grid._physicalAverage * steps;
-      grid._scrollHandler();
-      grid._debounceScrolling.flush();
 
-      // Expect the physical rows to be in order after scrolling
-      const rows = grid.$.items.querySelectorAll('tr');
-
-      rows.forEach((row, index) => {
-        if (index > 0) {
-          expect(row.index).to.equal(rows[index - 1].index + 1);
-        }
-      });
+      grid.$.table.scrollTop = 5000 + getPhysicalAverage(grid) * steps;
+      flushGrid(grid);
 
       expect(document.activeElement).to.equal(grid);
       expect(grid.shadowRoot.activeElement).to.equal(activeElement);
@@ -263,6 +205,18 @@ describe('basic features', () => {
     expect(parseInt(window.getComputedStyle(grid).getPropertyValue('flex-shrink'))).to.equal(1);
     expect(parseInt(window.getComputedStyle(grid).getPropertyValue('flex-grow'))).to.equal(1);
     expect(window.getComputedStyle(grid).getPropertyValue('flex-basis')).to.equal('auto');
+  });
+
+  it('should have attribute last on the last body row', () => {
+    grid.scrollToIndex(grid.size - 1);
+    const lastRowSlot = grid.shadowRoot.querySelector('[part~="row"][last] slot');
+    expect(lastRowSlot.assignedNodes()[0].textContent).to.equal(String(grid.size - 1));
+  });
+
+  it('should have attribute last on the last body row after resize', () => {
+    grid.size = 2;
+    const lastRowSlot = grid.shadowRoot.querySelector('[part~="row"][last] slot');
+    expect(lastRowSlot.assignedNodes()[0].textContent).to.equal(String(grid.size - 1));
   });
 });
 
@@ -318,6 +272,10 @@ describe('flex child', () => {
       await aTimeout(0);
       flushGrid(grid);
       const { left, top } = grid.getBoundingClientRect();
+
+      oneEvent(grid.$.table, 'scroll');
+      flushGrid(grid);
+
       const cell = grid._cellFromPoint(left + 1, top + 1);
       expect(grid.$.header.contains(cell)).to.be.true;
     });

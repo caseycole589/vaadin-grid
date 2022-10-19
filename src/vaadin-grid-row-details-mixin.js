@@ -1,10 +1,8 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
-import { Templatizer } from './vaadin-grid-templatizer.js';
-import { flush } from '@polymer/polymer/lib/utils/flush.js';
 
 /**
  * @polymerMixin
@@ -15,20 +13,12 @@ export const RowDetailsMixin = (superClass) =>
       return {
         /**
          * An array containing references to items with open row details.
-         * @type {Array<GridItem> | null | undefined}
+         * @type {!Array<!GridItem>}
          */
         detailsOpenedItems: {
           type: Array,
-          value: function () {
-            return [];
-          }
+          value: () => [],
         },
-
-        /**
-         * @type {HTMLTemplateElement}
-         * @protected
-         */
-        _rowDetailsTemplate: Object,
 
         /**
          * Custom function for rendering the content of the row details.
@@ -40,6 +30,9 @@ export const RowDetailsMixin = (superClass) =>
          *   the rendered item, contains:
          *   - `model.index` The index of the item.
          *   - `model.item` The item.
+         *   - `model.level` The number of the item's tree sublevel, starts from 0.
+         *   - `model.expanded` True if the item's tree sublevel is expanded.
+         *   - `model.selected` True if the item is selected.
          *
          * @type {GridRowDetailsRenderer | null | undefined}
          */
@@ -50,61 +43,69 @@ export const RowDetailsMixin = (superClass) =>
          * @protected
          */
         _detailsCells: {
-          type: Array
-        }
+          type: Array,
+        },
       };
     }
 
     static get observers() {
       return [
-        '_detailsOpenedItemsChanged(detailsOpenedItems.*, _rowDetailsTemplate, rowDetailsRenderer)',
-        '_rowDetailsTemplateOrRendererChanged(_rowDetailsTemplate, rowDetailsRenderer)'
+        '_detailsOpenedItemsChanged(detailsOpenedItems.*, rowDetailsRenderer)',
+        '_rowDetailsRendererChanged(rowDetailsRenderer)',
       ];
     }
 
+    /** @protected */
+    ready() {
+      super.ready();
+
+      this._detailsCellResizeObserver = new ResizeObserver((entries) => {
+        entries.forEach(({ target: cell }) => {
+          this._updateDetailsCellHeight(cell.parentElement);
+        });
+
+        // This workaround is needed until Safari also supports
+        // ResizeObserver.observe with {box: 'border-box'}
+        this.__virtualizer.__adapter._resizeHandler();
+      });
+    }
+
     /** @private */
-    _rowDetailsTemplateOrRendererChanged(rowDetailsTemplate, rowDetailsRenderer) {
-      if (rowDetailsTemplate && rowDetailsRenderer) {
-        throw new Error('You should only use either a renderer or a template for row details');
+    _rowDetailsRendererChanged(rowDetailsRenderer) {
+      if (!rowDetailsRenderer) {
+        return;
       }
-      if (rowDetailsTemplate || rowDetailsRenderer) {
-        if (rowDetailsTemplate && !rowDetailsTemplate.templatizer) {
-          const templatizer = new Templatizer();
-          templatizer._grid = this;
-          templatizer.dataHost = this.dataHost;
-          templatizer.template = rowDetailsTemplate;
-          rowDetailsTemplate.templatizer = templatizer;
-        }
 
-        if (this._columnTree) {
-          // Only update the rows if the column tree has already been initialized
-          Array.from(this.$.items.children).forEach((row) => {
-            if (!row.querySelector('[part~=details-cell]')) {
-              this._updateRow(row, this._columnTree[this._columnTree.length - 1]);
-              this._a11yUpdateRowDetailsOpened(row, false);
-            }
-            // Clear any old template instances
-            delete row.querySelector('[part~=details-cell]')._instance;
-          });
-        }
-
-        if (this.detailsOpenedItems.length) {
-          Array.from(this.$.items.children).forEach(this._toggleDetailsCell, this);
-          this._update();
-        }
+      if (this._columnTree) {
+        // Only update the rows if the column tree has already been initialized
+        Array.from(this.$.items.children).forEach((row) => {
+          if (!row.querySelector('[part~=details-cell]')) {
+            this._updateRow(row, this._columnTree[this._columnTree.length - 1]);
+            const isDetailsOpened = this._isDetailsOpened(row._item);
+            this._toggleDetailsCell(row, isDetailsOpened);
+          }
+        });
       }
     }
 
     /** @private */
-    _detailsOpenedItemsChanged(changeRecord) {
+    _detailsOpenedItemsChanged(changeRecord, rowDetailsRenderer) {
+      // Skip to avoid duplicate work of both “.splices” and “.length” updates.
       if (changeRecord.path === 'detailsOpenedItems.length' || !changeRecord.value) {
-        // Let’s avoid duplicate work of both “.splices” and “.length” updates.
         return;
       }
-      Array.from(this.$.items.children).forEach((row) => {
-        this._toggleDetailsCell(row, row._item);
-        this._a11yUpdateRowDetailsOpened(row, this._isDetailsOpened(row._item));
-        this._toggleAttribute('details-opened', this._isDetailsOpened(row._item), row);
+
+      [...this.$.items.children].forEach((row) => {
+        // Re-renders the row to possibly close the previously opened details.
+        if (row.hasAttribute('details-opened')) {
+          this._updateItem(row, row._item);
+          return;
+        }
+
+        // Re-renders the row to open the details when a row details renderer is provided.
+        if (rowDetailsRenderer && this._isDetailsOpened(row._item)) {
+          this._updateItem(row, row._item);
+        }
       });
     }
 
@@ -116,7 +117,9 @@ export const RowDetailsMixin = (superClass) =>
       cell.setAttribute('part', 'cell details-cell');
       // Freeze the details cell, so that it does not scroll horizontally
       // with the normal cells. This way it looks less weird.
-      this._toggleAttribute('frozen', true, cell);
+      cell.toggleAttribute('frozen', true);
+
+      this._detailsCellResizeObserver.observe(cell);
     }
 
     /**
@@ -124,46 +127,43 @@ export const RowDetailsMixin = (superClass) =>
      * @param {!GridItem} item
      * @protected
      */
-    _toggleDetailsCell(row, item) {
+    _toggleDetailsCell(row, detailsOpened) {
       const cell = row.querySelector('[part~="details-cell"]');
       if (!cell) {
         return;
       }
-      const detailsHidden = !this._isDetailsOpened(item);
-      const hiddenChanged = !!cell.hidden !== detailsHidden;
 
-      if ((!cell._instance && !cell._renderer) || cell.hidden !== detailsHidden) {
-        cell.hidden = detailsHidden;
-        if (detailsHidden) {
-          row.style.removeProperty('padding-bottom');
-        } else {
-          if (this.rowDetailsRenderer) {
-            cell._renderer = this.rowDetailsRenderer;
-            cell._renderer.call(this, cell._content, this, { index: row.index, item: item });
-          } else if (this._rowDetailsTemplate && !cell._instance) {
-            // Stamp the template
-            cell._instance = this._rowDetailsTemplate.templatizer.createInstance();
-            cell._content.innerHTML = '';
-            cell._content.appendChild(cell._instance.root);
-            this._updateItem(row, item);
-          }
+      cell.hidden = !detailsOpened;
 
-          flush();
-          row.style.setProperty('padding-bottom', `${cell.offsetHeight}px`);
-
-          requestAnimationFrame(() => this.notifyResize());
-        }
+      if (cell.hidden) {
+        return;
       }
-      if (hiddenChanged) {
-        this._updateMetrics();
-        this._positionItems();
+
+      // Assigns a renderer when the details cell is opened.
+      // The details cell content is rendered later in the `_updateItem` method.
+      if (this.rowDetailsRenderer) {
+        cell._renderer = this.rowDetailsRenderer;
+      }
+    }
+
+    /** @protected */
+    _updateDetailsCellHeight(row) {
+      const cell = row.querySelector('[part~="details-cell"]');
+      if (!cell) {
+        return;
+      }
+
+      if (cell.hidden) {
+        row.style.removeProperty('padding-bottom');
+      } else {
+        row.style.setProperty('padding-bottom', `${cell.offsetHeight}px`);
       }
     }
 
     /** @protected */
     _updateDetailsCellHeights() {
-      Array.from(this.$.items.querySelectorAll('[part~="details-cell"]:not([hidden])')).forEach((cell) => {
-        cell.parentElement.style.setProperty('padding-bottom', `${cell.offsetHeight}px`);
+      [...this.$.items.children].forEach((row) => {
+        this._updateDetailsCellHeight(row);
       });
     }
 
@@ -182,7 +182,7 @@ export const RowDetailsMixin = (superClass) =>
      */
     openItemDetails(item) {
       if (!this._isDetailsOpened(item)) {
-        this.push('detailsOpenedItems', item);
+        this.detailsOpenedItems = [...this.detailsOpenedItems, item];
       }
     }
 
@@ -192,16 +192,7 @@ export const RowDetailsMixin = (superClass) =>
      */
     closeItemDetails(item) {
       if (this._isDetailsOpened(item)) {
-        this.splice('detailsOpenedItems', this._getItemIndexInArray(item, this.detailsOpenedItems), 1);
-      }
-    }
-
-    /** @private */
-    _detailsOpenedInstanceChangedCallback(instance, value) {
-      if (value) {
-        this.openItemDetails(instance.item);
-      } else {
-        this.closeItemDetails(instance.item);
+        this.detailsOpenedItems = this.detailsOpenedItems.filter((i) => !this._itemsEqual(i, item));
       }
     }
   };

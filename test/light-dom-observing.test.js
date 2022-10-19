@@ -1,21 +1,22 @@
 import { expect } from '@esm-bundle/chai';
+import { aTimeout, fixtureSync, nextFrame, nextRender } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { aTimeout, fixtureSync, nextFrame } from '@open-wc/testing-helpers';
-import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
 import '@polymer/polymer/lib/elements/dom-bind.js';
 import '@polymer/polymer/lib/elements/dom-repeat.js';
+import '../vaadin-grid.js';
+import '../vaadin-grid-column-group.js';
+import '../vaadin-grid-selection-column.js';
+import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
 import {
   flushGrid,
   getCellContent,
   getHeaderCellContent,
-  getRows,
   getRowCells,
+  getRows,
   infiniteDataProvider,
-  scrollToEnd
+  scrollToEnd,
 } from './helpers.js';
-import '../vaadin-grid.js';
-import '../vaadin-grid-column-group.js';
-import '../vaadin-grid-selection-column.js';
 
 class XBooleanToggle extends PolymerElement {
   static get template() {
@@ -24,7 +25,7 @@ class XBooleanToggle extends PolymerElement {
 
   static get properties() {
     return {
-      value: { type: Boolean, notify: true }
+      value: { type: Boolean, notify: true },
     };
   }
 }
@@ -293,7 +294,7 @@ const fixtures = {
         </vaadin-grid-column>
       </vaadin-grid-column-group>
     </grid-wrapper>
-  `
+  `,
 };
 
 describe('light dom observing', () => {
@@ -303,7 +304,7 @@ describe('light dom observing', () => {
     grid = fixtureSync(fixtures[fixtureName]);
 
     if (grid.$.grid) {
-      // unwrap the <grid-wrapper>
+      // Unwrap the <grid-wrapper>
       wrapper = grid;
       grid = grid.$.grid || grid;
     }
@@ -316,7 +317,7 @@ describe('light dom observing', () => {
     // Assign the slot to the <grid-wrapper> children.
     if (wrapper) {
       Array.from(wrapper.children).forEach((wrapperChild) =>
-        wrapperChild.setAttribute('slot', options && options.inGroup ? 'group' : 'grid')
+        wrapperChild.setAttribute('slot', options && options.inGroup ? 'group' : 'grid'),
       );
     }
 
@@ -330,19 +331,19 @@ describe('light dom observing', () => {
 
   function expectFirstColumnHeader(columnName, level) {
     level = level || 0;
-    expect(getCellContent(getRows(header)[level].cells[0]).textContent).to.contain(columnName + ' header');
+    expect(getCellContent(getRows(header)[level].cells[0]).textContent).to.contain(`${columnName} header`);
   }
 
   function expectFirstColumnFooter(columnName, level) {
     level = level || 0;
     const lastLevel = getRows(header).length - 1;
-    expect(getCellContent(getRows(footer)[lastLevel - level].cells[0]).textContent).to.contain(columnName + ' footer');
+    expect(getCellContent(getRows(footer)[lastLevel - level].cells[0]).textContent).to.contain(`${columnName} footer`);
   }
 
   function expectFirstColumnBody(columnName) {
-    expect(getCellContent(getRows(body)[0].cells[0]).textContent).to.contain(columnName + ' body foo0');
-    expect(getCellContent(getRows(body)[1].cells[0]).textContent).to.contain(columnName + ' body foo1');
-    expect(getCellContent(getRows(body)[2].cells[0]).textContent).to.contain(columnName + ' body foo2');
+    expect(getCellContent(getRows(body)[0].cells[0]).textContent).to.contain(`${columnName} body foo0`);
+    expect(getCellContent(getRows(body)[1].cells[0]).textContent).to.contain(`${columnName} body foo1`);
+    expect(getCellContent(getRows(body)[2].cells[0]).textContent).to.contain(`${columnName} body foo2`);
   }
 
   function expectFirstColumn(columnName, level) {
@@ -366,40 +367,34 @@ describe('light dom observing', () => {
         await nextFrame();
       });
 
-      it('should support adding late', () => {
+      it('should support adding late', async () => {
         const column = createColumn();
         grid.insertBefore(column, grid.firstChild);
+        await nextRender();
         flushGrid(grid);
         expectFirstColumn('some');
       });
 
-      it('should support adding selection column late', () => {
+      it('should support adding selection column late', async () => {
         const column = document.createElement('vaadin-grid-selection-column');
         column.innerHTML = `
           <template class="header">some header</template>
           <template>some body [[item.value]]</template>
           <template class="footer">some footer</template>
         `;
+
         grid.insertBefore(column, grid.firstChild);
+        await nextRender();
         flushGrid(grid);
         expectFirstColumn('some');
       });
 
-      it('should support removing late', () => {
+      it('should support removing late', async () => {
         const column = grid.querySelector('vaadin-grid-column');
         grid.removeChild(column);
+        await nextRender();
         flushGrid(grid);
         expectFirstColumn('second');
-      });
-
-      it('should invoke node observer twice when removing columns', async () => {
-        const column = grid.querySelector('vaadin-grid-column');
-        const spy = sinon.spy(grid._observer, 'callback');
-        grid.removeChild(column);
-        flushGrid(grid);
-        await nextFrame();
-        // Once for the column and in effect of that, once for the removed cell content elements
-        expect(spy.callCount).to.gte(2);
       });
 
       it('should invoke node observer twice when adding columns', async () => {
@@ -407,9 +402,29 @@ describe('light dom observing', () => {
         const spy = sinon.spy(grid._observer, 'callback');
         grid.insertBefore(column, grid.firstChild);
         flushGrid(grid);
+
+        // Once the column is added
+        expect(spy.callCount).to.equal(1);
+
         await nextFrame();
-        // Once for the column and in effect of that, once for the added cell content elements
-        expect(spy.callCount).to.gte(2);
+
+        // Once the column cells are added
+        expect(spy.callCount).to.equal(2);
+      });
+
+      it('should invoke node observer twice when removing columns', async () => {
+        const column = grid.querySelector('vaadin-grid-column');
+        const spy = sinon.spy(grid._observer, 'callback');
+        grid.removeChild(column);
+        flushGrid(grid);
+
+        // Once the column is removed
+        expect(spy.callCount).to.equal(1);
+
+        await nextFrame();
+
+        // Once the column cells are removed
+        expect(spy.callCount).to.equal(2);
       });
 
       it('should not invoke on row reorder', (done) => {
@@ -471,8 +486,10 @@ describe('light dom observing', () => {
       it('should support adding late', async () => {
         const group = createGroup();
         grid.insertBefore(group, grid.firstChild);
+
+        await nextRender();
         flushGrid(grid);
-        await nextFrame();
+
         expectFirstColumnHeader('some group', 0);
         expectFirstColumnFooter('some group', 0);
         expectFirstColumn('some foo', 1);
@@ -481,8 +498,10 @@ describe('light dom observing', () => {
       it('should support removing late', async () => {
         const group = grid.querySelector('vaadin-grid-column-group');
         grid.removeChild(group);
+
+        await nextRender();
         flushGrid(grid);
-        await nextFrame();
+
         expectFirstColumnHeader('second group', 0);
         expectFirstColumnFooter('second group', 0);
         expectFirstColumn('second foo', 1);
@@ -501,8 +520,8 @@ describe('light dom observing', () => {
         const group = createGroup();
         firstGroup.insertBefore(group, firstGroup.firstChild);
 
+        await nextRender();
         flushGrid(grid);
-        await nextFrame();
 
         expectFirstColumnHeader('some group', 1);
         expectFirstColumnFooter('some group', 1);
@@ -512,7 +531,9 @@ describe('light dom observing', () => {
       it('should support removing late', async () => {
         const group = firstGroup.querySelector('vaadin-grid-column-group');
         firstGroup.removeChild(group);
-        await nextFrame();
+
+        await nextRender();
+
         expectFirstColumnHeader('second nested group', 1);
         expectFirstColumnFooter('second nested group', 1);
         expectFirstColumn('second foo', 2);
@@ -524,30 +545,35 @@ describe('light dom observing', () => {
     it('should provide initial state', async () => {
       repeater.render();
       await nextFrame();
-      expectFirstColumn(prefix + ' a', columnsLevel);
+      expectFirstColumn(`${prefix} a`, columnsLevel);
       expectFirstColumn('', columnsLevel);
       expectNumberOfColumns(3);
     });
 
     it('should add columns late', async () => {
+      flushGrid(grid);
       repeater.unshift('items', 'd');
       repeater.render();
       await nextFrame();
-      expectFirstColumn(prefix + ' d', columnsLevel);
+      flushGrid(grid);
+      expectFirstColumn(`${prefix} d`, columnsLevel);
       expectFirstColumn('', columnsLevel);
       expectNumberOfColumns(4);
     });
 
     it('should remove columns late', async () => {
+      flushGrid(grid);
       repeater.shift('items');
       repeater.render();
       await nextFrame();
-      expectFirstColumn(prefix + ' b', columnsLevel);
+      flushGrid(grid);
+      expectFirstColumn(`${prefix} b`, columnsLevel);
       expectFirstColumn('', columnsLevel);
       expectNumberOfColumns(2);
     });
 
     it('should remove cell content', async () => {
+      flushGrid(grid);
       const contentCount = grid.querySelectorAll('vaadin-grid-cell-content').length;
       repeater.shift('items');
       repeater.render();
@@ -566,32 +592,36 @@ describe('light dom observing', () => {
     });
 
     describe('columns inside grid', () => {
-      beforeEach(() => {
-        init('dom-repeat-columns', { columns: columns });
+      beforeEach(async () => {
+        init('dom-repeat-columns', { columns });
+        await aTimeout(0);
       });
 
       shouldSupportDomRepeat('grid repeats column');
     });
 
     describe('columns inside group', () => {
-      beforeEach(() => {
-        init('dom-repeat-columns-in-group', { columns: columns });
+      beforeEach(async () => {
+        init('dom-repeat-columns-in-group', { columns });
+        await aTimeout(0);
       });
 
       shouldSupportDomRepeat('group repeats column', 1);
     });
 
     describe('groups inside grid', () => {
-      beforeEach(() => {
-        init('dom-repeat-groups', { columns: columns });
+      beforeEach(async () => {
+        init('dom-repeat-groups', { columns });
+        await aTimeout(0);
       });
 
       shouldSupportDomRepeat('grid repeats group', 1);
     });
 
     describe('groups inside group', () => {
-      beforeEach(() => {
-        init('dom-repeat-groups-in-group', { columns: columns });
+      beforeEach(async () => {
+        init('dom-repeat-groups-in-group', { columns });
+        await aTimeout(0);
       });
 
       shouldSupportDomRepeat('group repeats group', 2);
@@ -599,7 +629,7 @@ describe('light dom observing', () => {
 
     describe('with row detail', () => {
       beforeEach(() => {
-        init('dom-repeat-columns-detailed', { columns: columns });
+        init('dom-repeat-columns-detailed', { columns });
       });
 
       it('should obey the "detailsOpened" template property', async () => {
@@ -608,7 +638,7 @@ describe('light dom observing', () => {
         const row = getRows(grid.$.items)[0];
         const cell = getRowCells(row)[0];
         const toggle = getCellContent(cell).children[0];
-        // open row details
+        // Open row details
         toggle.value = true;
         expect(grid.detailsOpenedItems).to.contain(row._item);
       });
@@ -620,7 +650,7 @@ describe('light dom observing', () => {
       describe('children mutations', () => {
         describe('with columns', () => {
           beforeEach(() => {
-            init('effective-children-columns', { inGroup: inGroup });
+            init('effective-children-columns', { inGroup });
           });
 
           it('should provide initial state', async () => {
@@ -651,7 +681,7 @@ describe('light dom observing', () => {
           let firstGroup;
 
           beforeEach(() => {
-            init('effective-children-groups', { inGroup: inGroup });
+            init('effective-children-groups', { inGroup });
             firstGroup = wrapper.querySelector('vaadin-grid-column-group');
           });
 
@@ -683,7 +713,7 @@ describe('light dom observing', () => {
         let firstGroup;
 
         beforeEach(() => {
-          init('effective-children-groups', { inGroup: inGroup });
+          init('effective-children-groups', { inGroup });
           firstGroup = wrapper.querySelector('vaadin-grid-column-group');
         });
 
@@ -718,6 +748,7 @@ describe('light dom observing', () => {
             const group = createGroup();
             firstGroup.insertBefore(group, firstGroup.firstChild);
             await nextFrame();
+            flushGrid(grid);
             expectNumberOfColumns(7);
             firstGroup.removeChild(group);
             await nextFrame();

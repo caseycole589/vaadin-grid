@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
 
@@ -15,14 +15,12 @@ export const A11yMixin = (superClass) =>
 
     /** @private */
     _a11yGetHeaderRowCount(_columnTree) {
-      return _columnTree.filter((level) =>
-        level.some((col) => col._headerTemplate || col.headerRenderer || col.path || col.header)
-      ).length;
+      return _columnTree.filter((level) => level.some((col) => col.headerRenderer || col.path || col.header)).length;
     }
 
     /** @private */
     _a11yGetFooterRowCount(_columnTree) {
-      return _columnTree.filter((level) => level.some((col) => col._headerTemplate || col.headerRenderer)).length;
+      return _columnTree.filter((level) => level.some((col) => col.headerRenderer)).length;
     }
 
     /** @private */
@@ -34,7 +32,7 @@ export const A11yMixin = (superClass) =>
       const bodyColumns = _columnTree[_columnTree.length - 1];
       this.$.table.setAttribute(
         'aria-rowcount',
-        size + this._a11yGetHeaderRowCount(_columnTree) + this._a11yGetFooterRowCount(_columnTree)
+        size + this._a11yGetHeaderRowCount(_columnTree) + this._a11yGetFooterRowCount(_columnTree),
       );
       this.$.table.setAttribute('aria-colcount', (bodyColumns && bodyColumns.length) || 0);
 
@@ -45,14 +43,14 @@ export const A11yMixin = (superClass) =>
     /** @protected */
     _a11yUpdateHeaderRows() {
       Array.from(this.$.header.children).forEach((headerRow, index) =>
-        headerRow.setAttribute('aria-rowindex', index + 1)
+        headerRow.setAttribute('aria-rowindex', index + 1),
       );
     }
 
     /** @protected */
     _a11yUpdateFooterRows() {
       Array.from(this.$.footer.children).forEach((footerRow, index) =>
-        footerRow.setAttribute('aria-rowindex', this._a11yGetHeaderRowCount(this._columnTree) + this.size + index + 1)
+        footerRow.setAttribute('aria-rowindex', this._a11yGetHeaderRowCount(this._columnTree) + this.size + index + 1),
       );
     }
 
@@ -78,28 +76,30 @@ export const A11yMixin = (superClass) =>
 
     /**
      * @param {!HTMLElement} row
-     * @param {number} level
      * @protected
      */
-    _a11yUpdateRowLevel(row, level) {
-      row.setAttribute('aria-level', level + 1);
+    _a11yUpdateRowExpanded(row) {
+      if (this.__isRowExpandable(row)) {
+        row.setAttribute('aria-expanded', 'false');
+      } else if (this.__isRowCollapsible(row)) {
+        row.setAttribute('aria-expanded', 'true');
+      } else {
+        row.removeAttribute('aria-expanded');
+      }
     }
 
     /**
      * @param {!HTMLElement} row
-     * @param {boolean} detailsOpened
+     * @param {number} level
      * @protected
      */
-    _a11yUpdateRowDetailsOpened(row, detailsOpened) {
-      Array.from(row.children).forEach((cell) => {
-        if (typeof detailsOpened === 'boolean') {
-          cell.setAttribute('aria-expanded', detailsOpened);
-        } else {
-          if (cell.hasAttribute('aria-expanded')) {
-            cell.removeAttribute('aria-expanded');
-          }
-        }
-      });
+    _a11yUpdateRowLevel(row, level) {
+      // Set level for the expandable rows itself, and all the nested rows.
+      if (level > 0 || this.__isRowCollapsible(row) || this.__isRowExpandable(row)) {
+        row.setAttribute('aria-level', level + 1);
+      } else {
+        row.removeAttribute('aria-level');
+      }
     }
 
     /**
@@ -137,8 +137,8 @@ export const A11yMixin = (superClass) =>
             'aria-sort',
             {
               asc: 'ascending',
-              desc: 'descending'
-            }[String(sorter.direction)] || 'none'
+              desc: 'descending',
+            }[String(sorter.direction)] || 'none',
           );
         }
       });

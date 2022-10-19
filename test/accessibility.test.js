@@ -1,8 +1,8 @@
 import { expect } from '@esm-bundle/chai';
-import { fixtureSync, nextFrame } from '@open-wc/testing-helpers';
+import { fixtureSync, nextFrame } from '@vaadin/testing-helpers';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
+import '../all-imports.js';
 import { flushGrid } from './helpers.js';
-import '../vaadin-grid.js';
-import '../vaadin-grid-column-group.js';
 
 const fixtures = {
   default: `
@@ -49,7 +49,7 @@ const fixtures = {
       </vaadin-grid-column>
       <template class="row-details">details</template>
     </vaadin-grid>
-  `
+  `,
 };
 
 describe('accessibility', () => {
@@ -61,8 +61,12 @@ describe('accessibility', () => {
     const col2 = document.createElement('vaadin-grid-column');
     if (grouped) {
       const grp = document.createElement('vaadin-grid-column-group');
-      grp.headerRenderer = (root) => (root.textContent = 'Group header');
-      grp.footerRenderer = (root) => (root.textContent = 'Group footer');
+      grp.headerRenderer = (root) => {
+        root.textContent = 'Group header';
+      };
+      grp.footerRenderer = (root) => {
+        root.textContent = 'Group footer';
+      };
       grp.appendChild(col1);
       grp.appendChild(col2);
       grid.appendChild(grp);
@@ -71,18 +75,28 @@ describe('accessibility', () => {
       grid.appendChild(col2);
     }
 
-    col1.headerRenderer = col2.headerRenderer = (root) => (root.textContent = 'header');
-    col1.footerRenderer = col2.footerRenderer = (root) => (root.textContent = 'footer');
-    col1.renderer = (root, col, model) => (root.textContent = model.index);
-    col2.renderer = (root, col, model) => (root.textContent = model.item);
+    col1.headerRenderer = col2.headerRenderer = (root) => {
+      root.textContent = 'header';
+    };
+    col1.footerRenderer = col2.footerRenderer = (root) => {
+      root.textContent = 'footer';
+    };
+    col1.renderer = (root, col, model) => {
+      root.textContent = model.index;
+    };
+    col2.renderer = (root, col, model) => {
+      root.textContent = model.item;
+    };
     grid.items = ['foo', 'bar'];
     flushGrid(grid);
   }
 
   function initRendererFixture(fixtureName) {
-    initGridRenderer(fixtureName == 'group');
-    if (fixtureName == 'details') {
-      grid.rowDetailsRenderer = (root) => (root.textContent = 'details');
+    initGridRenderer(fixtureName === 'group');
+    if (fixtureName === 'details') {
+      grid.rowDetailsRenderer = (root) => {
+        root.textContent = 'details';
+      };
     }
   }
 
@@ -111,8 +125,8 @@ describe('accessibility', () => {
     });
 
     describe('structural roles', () => {
-      it('should have role grid on table', () => {
-        expect(grid.$.table.getAttribute('role')).to.equal('grid');
+      it('should have role treegrid on table', () => {
+        expect(grid.$.table.getAttribute('role')).to.equal('treegrid');
       });
 
       it('should have role rowgroup on row groups', () => {
@@ -173,13 +187,79 @@ describe('accessibility', () => {
     });
 
     describe('row details not in use', () => {
-      it('should not have aria-expanded on body cells', () => {
-        expect(uniqueAttrValues(grid.$.items.querySelectorAll('td'), 'aria-expanded')).to.eql([null]);
-      });
-
       it('should not have aria-controls on body cells', () => {
         expect(uniqueAttrValues(grid.$.items.querySelectorAll('td'), 'aria-controls')).to.eql([null]);
       });
+    });
+  });
+
+  describe('treegrid', () => {
+    function hierarchicalDataProvider({ parentItem }, callback) {
+      // Let's use a count lower than pageSize so we can ignore page + pageSize for now
+      const itemsOnEachLevel = 5;
+
+      const items = [...Array(itemsOnEachLevel)].map((_, i) => {
+        return {
+          name: `${parentItem ? `${parentItem.name}-` : ''}${i}`,
+          // Let's only have child items on every second item
+          children: i % 2 === 0,
+        };
+      });
+
+      callback(items, itemsOnEachLevel);
+    }
+
+    beforeEach(() => {
+      grid = fixtureSync(`
+        <vaadin-grid item-id-path="name">
+          <vaadin-grid-column path="name" width="200px" flex-shrink="0"></vaadin-grid-column>
+        </vaadin-grid>
+      `);
+      grid.dataProvider = hierarchicalDataProvider;
+      flushGrid(grid);
+    });
+
+    it('should have aria-expanded false on expandable rows', () => {
+      expect(grid.$.items.children[0].getAttribute('aria-expanded')).to.equal('false');
+    });
+
+    it('should have aria-expanded true on expanded rows', () => {
+      grid.expandItem({ name: '0' });
+      expect(grid.$.items.children[0].getAttribute('aria-expanded')).to.equal('true');
+    });
+
+    it('should not have aria-expanded on non expandable rows', () => {
+      expect(grid.$.items.children[1].getAttribute('aria-expanded')).to.be.null;
+    });
+
+    it('should add aria-expanded to a row that becomes expandable', () => {
+      grid.expandItem({ name: '0' });
+      expect(grid.$.items.children[1].getAttribute('aria-expanded')).to.equal('false');
+    });
+
+    it('should remove aria-expanded from a row that becomes non expandable', () => {
+      grid.expandItem({ name: '0' });
+      grid.collapseItem({ name: '0' });
+      expect(grid.$.items.children[1].getAttribute('aria-expanded')).to.be.null;
+    });
+
+    it('should have aria-level on expandable rows', () => {
+      expect(grid.$.items.children[0].getAttribute('aria-level')).to.equal('1');
+    });
+
+    it('should not have aria-level on non expandable rows', () => {
+      expect(grid.$.items.children[1].getAttribute('aria-level')).to.be.null;
+    });
+
+    it('should add aria-level to a row that becomes expandable', () => {
+      grid.expandItem({ name: '0' });
+      expect(grid.$.items.children[1].getAttribute('aria-level')).to.equal('2');
+    });
+
+    it('should remove aria-expanded from a row that becomes non expandable', () => {
+      grid.expandItem({ name: '0' });
+      grid.collapseItem({ name: '0' });
+      expect(grid.$.items.children[1].getAttribute('aria-level')).to.be.null;
     });
   });
 
@@ -206,10 +286,6 @@ describe('accessibility', () => {
     });
 
     describe('row details in use', () => {
-      it('should have aria-expanded false on body cells', () => {
-        expect(uniqueAttrValues(grid.$.items.querySelectorAll('td'), 'aria-expanded')).to.eql(['false']);
-      });
-
       it('should have aria-controls referencing detail cell id on body cells', () => {
         Array.from(grid.$.items.children).forEach((row) => {
           const detailsCell = row.querySelector('td[part~="details-cell"]');
@@ -217,26 +293,9 @@ describe('accessibility', () => {
           expect(detailsCell.id).to.be.ok;
           expect(detailsCell.getAttribute('aria-controls')).to.equal(null);
           expect(uniqueAttrValues(row.querySelectorAll('td:not([part~="details-cell"])'), 'aria-controls')).to.eql([
-            detailsCell.id
+            detailsCell.id,
           ]);
         });
-      });
-
-      it('should set aria-expanded true on cells after row details opened', () => {
-        grid.openItemDetails(grid.items[0]);
-
-        expect(uniqueAttrValues(grid.$.items.children[0].children, 'aria-expanded')).to.eql(['true']);
-
-        expect(uniqueAttrValues(grid.$.items.children[1].children, 'aria-expanded')).to.eql(['false']);
-      });
-
-      it('should set aria-expanded false on cells after row details closed', () => {
-        grid.openItemDetails(grid.items[0]);
-        grid.closeItemDetails(grid.items[0]);
-
-        expect(uniqueAttrValues(grid.$.items.children[0].children, 'aria-expanded')).to.eql(['false']);
-
-        expect(uniqueAttrValues(grid.$.items.children[1].children, 'aria-expanded')).to.eql(['false']);
       });
     });
   });
@@ -291,7 +350,7 @@ describe('accessibility', () => {
 
       describe('row numbers', () => {
         function setANumberOfItems(grid, number) {
-          grid.items = Array.apply(null, new Array(number)).map((v, i) => `item ${i}`);
+          grid.items = Array.from({ length: number }, (_, i) => `item ${i}`);
           flushGrid(grid);
         }
 
@@ -305,16 +364,16 @@ describe('accessibility', () => {
           setANumberOfItems(grid, 100);
           expect(
             Array.from(grid.$.items.children)
-              .slice(0, 5) // assuming at least five body rows are visible
-              .map((row) => row.getAttribute('aria-rowindex'))
+              .slice(0, 5) // Assuming at least five body rows are visible
+              .map((row) => row.getAttribute('aria-rowindex')),
           ).to.eql(['3', '4', '5', '6', '7']);
           expect(grid.$.footer.children[0].getAttribute('aria-rowindex')).to.equal('103');
         });
 
         it('should update aria-rowindex on scroll', () => {
           setANumberOfItems(grid, 1000);
-          // scroll to end
-          grid._accessIronListAPI(() => grid.scrollToIndex(1000));
+          // Scroll to end
+          grid.scrollToIndex(1000);
 
           const ariaRowindexValues = Array.from(grid.$.items.children).map((row) => row.getAttribute('aria-rowindex'));
           expect(ariaRowindexValues).to.include.members(['1000', '1001', '1002']);

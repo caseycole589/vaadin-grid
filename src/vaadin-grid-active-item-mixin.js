@@ -1,6 +1,6 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
 
@@ -19,16 +19,18 @@ export const ActiveItemMixin = (superClass) =>
         activeItem: {
           type: Object,
           notify: true,
-          value: null
-        }
+          value: null,
+        },
       };
     }
 
+    /** @protected */
     ready() {
       super.ready();
 
       this.$.scroller.addEventListener('click', this._onClick.bind(this));
       this.addEventListener('cell-activate', this._activateItem.bind(this));
+      this.addEventListener('row-activate', this._activateItem.bind(this));
     }
 
     /** @private */
@@ -67,9 +69,9 @@ export const ActiveItemMixin = (superClass) =>
         this.dispatchEvent(
           new CustomEvent('cell-activate', {
             detail: {
-              model: this.__getRowModel(cell.parentElement)
-            }
-          })
+              model: this.__getRowModel(cell.parentElement),
+            },
+          }),
         );
       }
     }
@@ -107,10 +109,10 @@ export const isFocusable = (target) => {
   }
   const focusables = Array.from(
     target.parentNode.querySelectorAll(
-      '[tabindex], button, input, select, textarea, object, iframe, label, a[href], area[href]'
-    )
+      '[tabindex], button, input, select, textarea, object, iframe, label, a[href], area[href]',
+    ),
   ).filter((element) => element.getAttribute('part') !== 'cell body-cell');
 
-  const isFocusableElement = focusables.indexOf(target) !== -1;
+  const isFocusableElement = focusables.includes(target);
   return !target.disabled && isFocusableElement;
 };

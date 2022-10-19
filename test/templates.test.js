@@ -1,9 +1,11 @@
 import { expect } from '@esm-bundle/chai';
+import { fixtureSync, nextRender } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { aTimeout, fixtureSync } from '@open-wc/testing-helpers';
-import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
 import '@polymer/polymer/lib/elements/dom-bind.js';
-import '@vaadin/vaadin-text-field/vaadin-text-field.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
+import '@vaadin/text-field/vaadin-text-field.js';
+import '../vaadin-grid.js';
+import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
 import {
   flushGrid,
   getBodyCellContent,
@@ -11,9 +13,8 @@ import {
   getCellContent,
   getContainerCellContent,
   getFirstCell,
-  infiniteDataProvider
+  infiniteDataProvider,
 } from './helpers.js';
-import '../vaadin-grid.js';
 
 class GridWithSlots extends PolymerElement {
   static get template() {
@@ -62,22 +63,22 @@ class GridWithSlots extends PolymerElement {
       parentProp: String,
       parentPath: {
         type: Object,
-        value: function () {
+        value() {
           return {
-            foo: 'foo'
+            foo: 'foo',
           };
-        }
+        },
       },
       dataProvider: {
-        value: function () {
+        value() {
           return infiniteDataProvider;
-        }
-      }
+        },
+      },
     };
   }
 
   _format(value) {
-    return 'foo' + value;
+    return `foo${value}`;
   }
 
   _formatItem(item) {
@@ -109,7 +110,7 @@ class SlottedTemplates extends PolymerElement {
   static get properties() {
     return {
       foo: String,
-      bar: String
+      bar: String,
     };
   }
 
@@ -119,35 +120,6 @@ class SlottedTemplates extends PolymerElement {
 }
 
 customElements.define('slotted-templates', SlottedTemplates);
-
-class ObservedGrid extends PolymerElement {
-  static get template() {
-    return html`
-      <vaadin-grid items='["foo"]' id="grid">
-        <template class="row-details"> [[index]] </template>
-        <vaadin-grid-column>
-          <template class="header">
-            <vaadin-grid-filter path="index"></vaadin-grid-filter>
-          </template>
-          <template>[[index]] [[_count(item, index)]]</template>
-        </vaadin-grid-column>
-      </vaadin-grid>
-    `;
-  }
-
-  static get properties() {
-    return {
-      count: Number
-    };
-  }
-
-  _count() {
-    this.count = this.count || 0;
-    this.count++;
-  }
-}
-
-customElements.define('observed-grid', ObservedGrid);
 
 function getHeaderCell(grid, index) {
   return grid.$.header.querySelectorAll('[part~="cell"]')[index];
@@ -196,8 +168,8 @@ describe('templates', () => {
       parent.appendChild(grid);
       flushGrid(grid);
 
-      expect(grid.$.header.children[0].children[0].children.length).to.eql(1); // with a header template
-      expect(grid.$.header.children[0].children[3].children.length).to.eql(1); // without a header template
+      expect(grid.$.header.children[0].children[0].children.length).to.eql(1); // With a header template
+      expect(grid.$.header.children[0].children[3].children.length).to.eql(1); // Without a header template
     });
 
     it('should not restamp footer templates on attach', () => {
@@ -207,8 +179,8 @@ describe('templates', () => {
       parent.appendChild(grid);
       flushGrid(grid);
 
-      expect(grid.$.footer.children[0].children[0].children.length).to.eql(1); // with a footer template
-      expect(grid.$.footer.children[0].children[3].children.length).to.eql(1); // without footer template
+      expect(grid.$.footer.children[0].children[0].children.length).to.eql(1); // With a footer template
+      expect(grid.$.footer.children[0].children[3].children.length).to.eql(1); // Without footer template
     });
 
     describe('using functions inside templates', () => {
@@ -223,7 +195,7 @@ describe('templates', () => {
       it('should not invoke computed functions with null item', () => {
         const spy = sinon.spy(container, '_formatItem');
         grid.size = 1000;
-        grid._scrollToIndex(100);
+        grid.scrollToIndex(100);
         spy.getCalls().forEach((call) => {
           expect(call.args[0]).not.to.be.null;
         });
@@ -233,7 +205,7 @@ describe('templates', () => {
       it('should not invoke computed functions with empty item', () => {
         const spy = sinon.spy(container, '_formatItem');
         grid.size = 1000;
-        grid._scrollToIndex(100);
+        grid.scrollToIndex(100);
         spy.getCalls().forEach((call) => {
           expect(call.args[0]).not.to.be.empty;
         });
@@ -304,7 +276,7 @@ describe('templates', () => {
             fooSetter(newVal);
             foo = newVal;
           },
-          get: () => foo
+          get: () => foo,
         });
 
         // Change the object, notify Polymer
@@ -351,20 +323,31 @@ describe('templates', () => {
     beforeEach(() => {
       container = fixtureSync('<grid-with-slots></grid-with-slots>');
       grid = container.$.grid;
+
+      // The infinite data provider doesn't support 2-way binding of the item property
+      // so that the array data provider should be used instead:
+      grid.dataProvider = null;
+      grid.items = [{ value: 'item0' }, { value: 'item1' }];
+
       flushGrid(grid);
+
       input = getCellContent(getCell(grid, 3)).querySelector('vaadin-text-field');
     });
 
     it('should two-way bind instance path inside cell templates', () => {
+      const cell = getCell(grid, 3);
+
       input.value = 'bar0';
 
-      expect(getCell(grid, 3)._instance.item.value).to.eql('bar0');
+      expect(getCellContent(cell).__templateInstance.item.value).to.eql('bar0');
     });
 
     it('should notify other cell templates for instance path changes', () => {
+      const cell = getCell(grid, 4);
+
       input.value = 'bar0';
 
-      expect(getCellContent(getCell(grid, 4)).textContent).to.contain('bar0');
+      expect(getCellContent(cell).textContent).to.contain('bar0');
     });
   });
 });
@@ -442,7 +425,7 @@ describe('slotted templates', () => {
   });
 
   ['header', 'footer'].forEach((container) => {
-    it(`should change the ${container} template`, () => {
+    it(`should change the ${container} template`, async () => {
       const newTemplate = document.createElement('template');
       newTemplate.classList.add(container);
       newTemplate.setAttribute('slot', `grid-column-${container}-template`);
@@ -450,39 +433,23 @@ describe('slotted templates', () => {
 
       wrapper.removeChild(wrapper.querySelector(`template.${container}`));
       wrapper.appendChild(newTemplate);
+      await nextRender();
       flushGrid(grid);
-      const column = newTemplate.assignedSlot.parentElement;
-      column._templateObserver.flush();
 
       expect(getContainerCellContent(grid.$[container], 0, 5).textContent).to.equal(`${container}-bar`);
     });
   });
 
-  it(`should change the body template`, () => {
+  it(`should change the body template`, async () => {
     const newTemplate = document.createElement('template');
     newTemplate.setAttribute('slot', `grid-column-template`);
     newTemplate.innerHTML = `bar-[[index]]`;
 
     slotted.removeChild(slotted.querySelector(`template`));
     slotted.appendChild(newTemplate);
+    await nextRender();
     flushGrid(grid);
-    const column = newTemplate.assignedSlot.assignedSlot.parentElement;
-    column._templateObserver.flush();
 
     expect(getContainerCellContent(grid.$.items, 0, 5).textContent).to.equal('bar-0');
-  });
-});
-
-describe('observed', () => {
-  let observed;
-
-  beforeEach(() => {
-    observed = fixtureSync('<observed-grid></observed-grid>');
-    flushGrid(observed.$.grid);
-  });
-
-  it('should invoke once', async () => {
-    await aTimeout(300); // Filter's debounce time is 200ms
-    expect(observed.count).to.equal(1);
   });
 });

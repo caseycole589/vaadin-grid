@@ -1,12 +1,27 @@
-import { GridEventContext } from './interfaces';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { Constructor } from '@open-wc/dedupe-mixin';
+import type { GridColumn } from './vaadin-grid-column.js';
 
-declare function EventContextMixin<T extends new (...args: any[]) => {}>(base: T): T & EventContextMixinConstructor;
-
-interface EventContextMixinConstructor {
-  new (...args: any[]): EventContextMixin;
+export interface GridEventContext<TItem> {
+  section?: 'body' | 'details' | 'footer' | 'header';
+  item?: TItem;
+  column?: GridColumn<TItem>;
+  index?: number;
+  selected?: boolean;
+  detailsOpened?: boolean;
+  expanded?: boolean;
+  level?: number;
 }
 
-interface EventContextMixin {
+export declare function EventContextMixin<TItem, T extends Constructor<HTMLElement>>(
+  base: T,
+): Constructor<EventContextMixinClass<TItem>> & T;
+
+export declare class EventContextMixinClass<TItem> {
   /**
    * Returns an object with context information about the event target:
    * - `item`: the data object corresponding to the targeted row (not specified when targeting header or footer)
@@ -25,7 +40,5 @@ interface EventContextMixin {
    * This may be the case eg. if the event is fired on the `<vaadin-grid>` element and not any deeper in the DOM, or if
    * the event targets the empty part of the grid body.
    */
-  getEventContext(event: Event): GridEventContext | object | null;
+  getEventContext(event: Event): GridEventContext<TItem>;
 }
-
-export { EventContextMixin, EventContextMixinConstructor };

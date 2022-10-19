@@ -1,5 +1,7 @@
-import { registerStyles, css } from '@vaadin/vaadin-themable-mixin/register-styles.js';
 import '@vaadin/vaadin-lumo-styles/color.js';
+import '@vaadin/vaadin-lumo-styles/style.js';
+import '@vaadin/vaadin-lumo-styles/spacing.js';
+import { css, registerStyles } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
 
 registerStyles(
   'vaadin-grid-sorter',
@@ -10,6 +12,7 @@ registerStyles(
       -webkit-user-select: none;
       -moz-user-select: none;
       user-select: none;
+      cursor: var(--lumo-clickable-cursor);
     }
 
     [part='content'] {
@@ -22,8 +25,12 @@ registerStyles(
       margin-left: var(--lumo-space-s);
     }
 
-    :host(:not([direction])) [part='indicators']::before {
-      opacity: 0.2;
+    [part='indicators']::before {
+      transform: scale(0.8);
+    }
+
+    :host(:not([direction]):not(:hover)) [part='indicators'] {
+      color: var(--lumo-tertiary-text-color);
     }
 
     :host([direction]) {
@@ -42,5 +49,5 @@ registerStyles(
       margin-left: 0;
     }
   `,
-  { moduleId: 'lumo-grid-sorter' }
+  { moduleId: 'lumo-grid-sorter' },
 );

@@ -1,6 +1,7 @@
-import { registerStyles, css } from '@vaadin/vaadin-themable-mixin/register-styles.js';
 import '@vaadin/vaadin-lumo-styles/color.js';
 import '@vaadin/vaadin-lumo-styles/spacing.js';
+import '@vaadin/vaadin-lumo-styles/style.js';
+import { css, registerStyles } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
 
 registerStyles(
   'vaadin-grid-tree-toggle',
@@ -9,7 +10,7 @@ registerStyles(
       --vaadin-grid-tree-toggle-level-offset: 2em;
       align-items: center;
       vertical-align: middle;
-      margin-left: calc(var(--lumo-space-s) * -1);
+      transform: translateX(calc(var(--lumo-space-s) * -1));
       -webkit-tap-highlight-color: transparent;
     }
 
@@ -25,6 +26,7 @@ registerStyles(
       height: 1em;
       text-align: center;
       color: var(--lumo-contrast-50pct);
+      cursor: var(--lumo-clickable-cursor);
       /* Increase touch target area */
       padding: calc(1em / 3);
       margin: calc(1em / -3);
@@ -106,5 +108,5 @@ registerStyles(
       content: var(--lumo-icons-angle-left);
     }
   `,
-  { moduleId: 'lumo-grid-tree-toggle' }
+  { moduleId: 'lumo-grid-tree-toggle' },
 );

@@ -1,17 +1,25 @@
-import { GridSorterDirection } from './interfaces';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import { DirMixin } from '@vaadin/component-base/src/dir-mixin.js';
+import { ThemableMixin } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
+
+export type GridSorterDirection = 'asc' | 'desc' | null;
 
 /**
  * Fired when the `direction` property changes.
  */
-export type GridSorterDirectionChanged = CustomEvent<{ value: GridSorterDirection }>
+export type GridSorterDirectionChangedEvent = CustomEvent<{ value: GridSorterDirection }>;
 
-export interface GridSorterElementEventMap {
+export interface GridSorterCustomEventMap {
   'sorter-changed': Event;
 
-  'direction-changed': GridSorterDirectionChanged;
+  'direction-changed': GridSorterDirectionChangedEvent;
 }
 
-export interface GridSorterEventMap extends HTMLElementEventMap, GridSorterElementEventMap {}
+export interface GridSorterEventMap extends HTMLElementEventMap, GridSorterCustomEventMap {}
 
 /**
  * `<vaadin-grid-sorter>` is a helper element for the `<vaadin-grid>` that provides out-of-the-box UI controls,
@@ -19,12 +27,18 @@ export interface GridSorterEventMap extends HTMLElementEventMap, GridSorterEleme
  *
  * #### Example:
  * ```html
- * <vaadin-grid-column>
- *   <template class="header">
- *     <vaadin-grid-sorter path="name.first">First name</vaadin-grid-sorter>
- *   </template>
- *   <template>[[item.name.first]]</template>
- * </vaadin-grid-column>
+ * <vaadin-grid-column id="column"></vaadin-grid-column>
+ * ```
+ * ```js
+ * const column = document.querySelector('#column');
+ * column.renderer = (root, column, model) => {
+ *   let sorter = root.firstElementChild;
+ *   if (!sorter) {
+ *     sorter = document.createElement('vaadin-grid-sorter');
+ *     root.appendChild(sorter);
+ *   }
+ *   sorter.path = 'name.first';
+ * };
  * ```
  *
  * ### Styling
@@ -46,7 +60,7 @@ export interface GridSorterEventMap extends HTMLElementEventMap, GridSorterEleme
  * @fires {CustomEvent} direction-changed - Fired when the `direction` property changes.
  * @fires {CustomEvent} sorter-changed - Fired when the `path` or `direction` property changes.
  */
-declare class GridSorterElement extends HTMLElement {
+declare class GridSorter extends ThemableMixin(DirMixin(HTMLElement)) {
   /**
    * JS Path of the property in the item used for sorting the data.
    */
@@ -59,25 +73,23 @@ declare class GridSorterElement extends HTMLElement {
    */
   direction: GridSorterDirection | null | undefined;
 
-  _order: number | null;
-
   addEventListener<K extends keyof GridSorterEventMap>(
     type: K,
-    listener: (this: GridSorterElement, ev: GridSorterEventMap[K]) => void,
-    options?: boolean | AddEventListenerOptions
+    listener: (this: GridSorter, ev: GridSorterEventMap[K]) => void,
+    options?: AddEventListenerOptions | boolean,
   ): void;
 
   removeEventListener<K extends keyof GridSorterEventMap>(
     type: K,
-    listener: (this: GridSorterElement, ev: GridSorterEventMap[K]) => void,
-    options?: boolean | EventListenerOptions
+    listener: (this: GridSorter, ev: GridSorterEventMap[K]) => void,
+    options?: EventListenerOptions | boolean,
   ): void;
 }
 
 declare global {
   interface HTMLElementTagNameMap {
-    'vaadin-grid-sorter': GridSorterElement;
+    'vaadin-grid-sorter': GridSorter;
   }
 }
 
-export { GridSorterElement };
+export { GridSorter };

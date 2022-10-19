@@ -1,19 +1,19 @@
 import { expect } from '@esm-bundle/chai';
+import { fixtureSync, listenOnce } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { fixtureSync } from '@open-wc/testing-helpers';
-import {
-  flushGrid,
-  getBodyCellContent,
-  getCellContent,
-  getRows,
-  getRowCells,
-  infiniteDataProvider,
-  listenOnce
-} from './helpers.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
 import '../vaadin-grid.js';
 import '../vaadin-grid-selection-column.js';
 import '../vaadin-grid-filter.js';
 import '../vaadin-grid-column-group.js';
+import {
+  flushGrid,
+  getBodyCellContent,
+  getCellContent,
+  getRowCells,
+  getRows,
+  infiniteDataProvider,
+} from './helpers.js';
 
 const fixtures = {
   renderer: `
@@ -31,7 +31,7 @@ const fixtures = {
         <template>bar</template>
       </vaadin-grid-column>
     </vaadin-grid>
-  `
+  `,
 };
 
 describe('selection', () => {
@@ -51,14 +51,26 @@ describe('selection', () => {
     beforeEach(() => {
       grid = fixtureSync(fixtures.renderer);
       const cols = grid.children;
-      cols[0].renderer = (root) => (root.textContent = 'foo');
-      cols[1].renderer = (root) => (root.textContent = 'bar');
+      cols[0].renderer = (root) => {
+        root.textContent = 'foo';
+      };
+      cols[1].renderer = (root) => {
+        root.textContent = 'bar';
+      };
       configureGrid();
     });
 
     it('should set selected attribute', () => {
       expect(rows[0].hasAttribute('selected')).to.be.true;
       expect(rows[1].hasAttribute('selected')).to.be.false;
+    });
+
+    it('should not update selected attribute for hidden rows', () => {
+      grid.size = 0;
+      grid.selectedItems = [];
+      // Even though all selections were cleared, the first row is hidden / not in use
+      // because the grid's size was set to 0. Unused rows should never be updated.
+      expect(rows[0].hasAttribute('selected')).to.be.true;
     });
 
     it('should deselect an equaling item', () => {
@@ -106,19 +118,23 @@ describe('selection', () => {
     describe(`${type} cells`, () => {
       beforeEach(() => {
         grid = fixtureSync(fixtures[type]);
-        if (type == 'renderer') {
+        if (type === 'renderer') {
           const cols = grid.children;
-          cols[0].renderer = (root) => (root.textContent = 'foo');
-          cols[1].renderer = (root) => (root.textContent = 'bar');
+          cols[0].renderer = (root) => {
+            root.textContent = 'foo';
+          };
+          cols[1].renderer = (root) => {
+            root.textContent = 'bar';
+          };
         }
         configureGrid();
       });
 
-      (type == 'template' ? it : it.skip)('should reflect cell instance value', () => {
-        if (type == 'template') {
+      (type === 'template' ? it : it.skip)('should reflect cell instance value', () => {
+        if (type === 'template') {
           const cells = getRowCells(rows[0]);
-          cells[0]._instance.selected = false;
-          expect(cells[0]._instance.selected).to.be.false;
+          cells[0]._content.__templateInstance.selected = false;
+          expect(cells[0]._content.__templateInstance.selected).to.be.false;
           expect(grid.selectedItems).to.be.empty;
         }
       });
@@ -126,15 +142,15 @@ describe('selection', () => {
       it('should bind to cells', () => {
         const cells = getRowCells(rows[0]);
         let cell = cells[0];
-        let model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+        let model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
         expect(model.selected).to.be.true;
 
         cell = cells[1];
-        model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+        model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
         expect(model.selected).to.be.true;
 
         cell = getRowCells(rows[1])[0];
-        model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+        model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
         expect(model.selected).to.be.false;
       });
 
@@ -143,7 +159,7 @@ describe('selection', () => {
         const cells = getRowCells(rows[0]);
         grid.selectedItems = [{ value: 'foo0' }];
         const cell = cells[0];
-        const model = cell._instance ? cell._instance : grid.__getRowModel(cell.parentElement);
+        const model = cell._content.__templateInstance ?? grid.__getRowModel(cell.parentElement);
         expect(model.selected).to.be.true;
       });
     });
@@ -211,6 +227,14 @@ describe('multi selection column', () => {
   it('should select item when checkbox is checked', () => {
     firstBodyCheckbox.checked = true;
     expect(grid._isSelected(cachedItems[0])).to.be.true;
+  });
+
+  it('should dispatch one event on selection', () => {
+    const spy = sinon.spy();
+    grid.addEventListener('selected-items-changed', spy);
+    firstBodyCheckbox.checked = true;
+    expect(spy.callCount).to.equal(1);
+    expect(spy.getCall(0).args[0].detail.value).to.equal(grid.selectedItems);
   });
 
   it('should add the item to selectedItems when row is clicked and auto-select is enabled', () => {
@@ -336,7 +360,7 @@ describe('multi selection column', () => {
     expect(selectAllCheckbox.indeterminate).to.be.true;
   });
 
-  // iOS needs both to show the indeterminate status
+  // IOS needs both to show the indeterminate status
   it('should have indeterminate and select-all when an item is selected', () => {
     expect(selectAllCheckbox.checked).to.be.false;
     expect(selectAllCheckbox.indeterminate).not.to.be.ok;
@@ -385,6 +409,16 @@ describe('multi selection column', () => {
     expect(selectionColumn.selectAll).to.be.false;
   });
 
+  it('should not clear pre-selected items', () => {
+    const grid = fixtureSync(`
+      <vaadin-grid selected-items='[{"value": "foo"}]'>
+        <vaadin-grid-selection-column></vaadin-grid-selection-column>
+        <vaadin-grid-column path="value"></vaadin-grid-column>
+      </vaadin-grid>
+    `);
+    expect(grid.selectedItems).to.have.length(1);
+  });
+
   it('should have selectAll after selecting all manually', () => {
     selectAllCheckbox.click();
     firstBodyCheckbox.checked = true;
@@ -393,24 +427,6 @@ describe('multi selection column', () => {
 
     expect(selectionColumn.selectAll).to.be.true;
     expect(selectAllCheckbox.indeterminate).to.be.false;
-  });
-
-  it('should not reassign selectedItems array when selecting all manually', () => {
-    selectAllCheckbox.click();
-    firstBodyCheckbox.checked = false;
-
-    const details = [];
-    const spy = sinon.spy((e) => {
-      // event object gets reused so need to store the details before asserting.
-      details.push(e.detail);
-    });
-    grid.addEventListener('selected-items-changed', spy);
-
-    firstBodyCheckbox.checked = true;
-
-    expect(details.length).to.eql(2); // should have 3rd event with path 'selectedItems'
-    expect(details[0].path).to.eql('selectedItems.splices');
-    expect(details[1].path).to.eql('selectedItems.length');
   });
 
   it('should select-all when all items are selected', () => {
@@ -459,27 +475,48 @@ describe('multi selection column', () => {
     expect(() => checkbox.click()).not.to.throw(Error);
   });
 
-  it('should override the header content with header text', () => {
+  it('should override the header content with a header text', () => {
     selectionColumn.header = 'foo';
+
     expect(firstHeaderCellContent.textContent).to.equal('foo');
+    expect(firstBodyCellContent.firstElementChild).to.equal(firstBodyCheckbox);
+  });
+
+  it('should not override the header content with a path', () => {
+    selectionColumn.path = 'length';
+
+    expect(firstHeaderCellContent.firstElementChild).to.equal(selectAllCheckbox);
+  });
+
+  it('should not override the body content with a path', () => {
+    selectionColumn.path = 'length';
+
     expect(firstBodyCellContent.firstElementChild).to.equal(firstBodyCheckbox);
   });
 
   it('should override the header content with a header renderer', () => {
-    selectionColumn.headerRenderer = (root) => (root.textContent = 'foo');
+    selectionColumn.headerRenderer = (root) => {
+      root.textContent = 'foo';
+    };
+
     expect(firstHeaderCellContent.textContent).to.equal('foo');
     expect(firstBodyCellContent.firstElementChild).to.equal(firstBodyCheckbox);
   });
 
-  it('should override the body content with path', () => {
-    selectionColumn.path = 'length';
-    expect(firstBodyCellContent.textContent).to.equal('3');
+  it('should override the body content with a renderer', () => {
+    selectionColumn.renderer = (root) => {
+      root.textContent = 'foo';
+    };
+
+    expect(firstBodyCellContent.textContent).to.equal('foo');
     expect(firstHeaderCellContent.firstElementChild).to.equal(selectAllCheckbox);
   });
 
-  it('should override the body content with a renderer', () => {
-    selectionColumn.renderer = (root) => (root.textContent = 'foo');
-    expect(firstBodyCellContent.textContent).to.equal('foo');
-    expect(firstHeaderCellContent.firstElementChild).to.equal(selectAllCheckbox);
+  it('should select all items when select all is set', () => {
+    grid.items = Array.from({ length: 60 }, (_, key) => key + 1);
+
+    selectionColumn.selectAll = true;
+
+    expect(grid.selectedItems).to.eql(grid.items);
   });
 });

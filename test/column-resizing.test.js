@@ -1,19 +1,18 @@
 import { expect } from '@esm-bundle/chai';
+import { fixtureSync, listenOnce, nextFrame, nextRender } from '@vaadin/testing-helpers';
 import sinon from 'sinon';
-import { fixtureSync, nextFrame } from '@open-wc/testing-helpers';
-import { flush } from '@polymer/polymer/lib/utils/flush.js';
+import '@vaadin/polymer-legacy-adapter/template-renderer.js';
+import '../vaadin-grid.js';
+import '../vaadin-grid-column-group.js';
 import {
   dragAndDropOver,
   fire,
   flushGrid,
   getHeaderCellContent,
-  getRows,
   getRowCells,
-  listenOnce,
-  infiniteDataProvider
+  getRows,
+  infiniteDataProvider,
 } from './helpers.js';
-import '../vaadin-grid.js';
-import '../vaadin-grid-column-group.js';
 
 function getElementFromPoint(context, x, y) {
   return context.shadowRoot.elementFromPoint(x, y);
@@ -39,7 +38,7 @@ describe('column resizing', () => {
     flushGrid(grid);
     headerCells = getRowCells(getRows(grid.$.header)[0]);
     handle = headerCells[0].querySelector('[part~="resize-handle"]');
-    await nextFrame();
+    await nextRender();
   });
 
   it('should be resizable', () => {
@@ -73,6 +72,60 @@ describe('column resizing', () => {
 
       expect(headerCells[0].clientWidth).to.equal(direction === 'rtl' ? 349 : 200);
     });
+
+    it(`should resize on frozen to end cell track in ${direction}`, () => {
+      grid.setAttribute('dir', direction);
+      const column = grid._columnTree[0][1];
+      column.resizable = true;
+      column.frozenToEnd = true;
+      handle = headerCells[1].querySelector('[part~="resize-handle"]');
+
+      const options = { node: handle };
+      const rect = headerCells[1].getBoundingClientRect();
+
+      fire('track', { state: 'start' }, options);
+
+      // Increase column width by 50px
+      const x = direction === 'rtl' ? rect.right + 50 : rect.left - 50;
+      fire('track', { state: 'track', x, y: 0 }, options);
+
+      expect(headerCells[1].clientWidth).to.equal(198);
+    });
+
+    it(`should scroll when handle moves below frozen to end cell in ${direction}`, async () => {
+      grid.setAttribute('dir', direction);
+
+      const column = grid._columnTree[0][1];
+      column.frozenToEnd = true;
+      grid.style.border = '0px';
+      grid.style.width = '190px';
+      await nextRender();
+      expect(grid.$.table.scrollLeft).to.equal(0);
+
+      const options = { node: handle };
+      const rect = headerCells[0].getBoundingClientRect();
+
+      fire('track', { state: 'start' }, options);
+
+      // Increase column width by 10px
+      const x = direction === 'rtl' ? rect.left - 10 : rect.right + 10;
+      fire('track', { state: 'track', x, y: 0 }, options);
+
+      expect(grid.$.table.scrollLeft).to.equal(direction === 'rtl' ? -10 : 10);
+    });
+  });
+
+  it('should set min width based on cell content padding', () => {
+    const options = { node: handle };
+    const rect = headerCells[0].getBoundingClientRect();
+
+    const contentStyle = getComputedStyle(headerCells[0]._content);
+    const padding = parseInt(contentStyle.paddingLeft) + parseInt(contentStyle.paddingRight);
+
+    fire('track', { state: 'start' }, options);
+    fire('track', { state: 'track', x: rect.left - 100, y: 0 }, options);
+
+    expect(headerCells[0].clientWidth).to.be.greaterThan(padding);
   });
 
   it('should not listen to track event on scroller', () => {
@@ -209,7 +262,6 @@ describe('column group resizing', () => {
   it('should inherit resizable value from parent group', async () => {
     const newColumn = document.createElement('vaadin-grid-column');
     grid._columnTree[0][0].appendChild(newColumn);
-    flush();
     grid._columnTree[0][0]._observer.flush();
 
     await nextFrame();

@@ -1,15 +1,21 @@
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import { DirMixin } from '@vaadin/component-base/src/dir-mixin.js';
 import { ThemableMixin } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
 
 /**
  * Fired when the `expanded` property changes.
  */
-export type GridTreeToggleExpandedChanged = CustomEvent<{ value: boolean }>;
+export type GridTreeToggleExpandedChangedEvent = CustomEvent<{ value: boolean }>;
 
-export interface GridTreeToggleElementEventMap {
-  'expanded-changed': GridTreeToggleExpandedChanged;
+export interface GridTreeToggleCustomEventMap {
+  'expanded-changed': GridTreeToggleExpandedChangedEvent;
 }
 
-export interface GridTreeToggleEventMap extends HTMLElementEventMap, GridTreeToggleElementEventMap {}
+export interface GridTreeToggleEventMap extends HTMLElementEventMap, GridTreeToggleCustomEventMap {}
 
 /**
  * `<vaadin-grid-tree-toggle>` is a helper element for the `<vaadin-grid>`
@@ -17,17 +23,22 @@ export interface GridTreeToggleEventMap extends HTMLElementEventMap, GridTreeTog
  *
  * #### Example:
  * ```html
- * <vaadin-grid-column>
- *   <template class="header">Package name</template>
- *   <template>
- *     <vaadin-grid-tree-toggle
- *         leaf="[[!item.hasChildren]]"
- *         expanded="{{expanded}}"
- *         level="[[level]]">
- *       [[item.name]]
- *     </vaadin-grid-tree-toggle>
- *   </template>
- * </vaadin-grid-column>
+ * <vaadin-grid-column id="column"></vaadin-grid-column>
+ * ```
+ * ```js
+ * const column = document.querySelector('#column');
+ * column.renderer = (root, column, model) => {
+ *   let treeToggle = root.firstElementChild;
+ *   if (!treeToggle) {
+ *     treeToggle = document.createElement('vaadin-grid-tree-toggle');
+ *     treeToggle.addEventListener('expanded-changed', () => { ... });
+ *     root.appendChild(treeToggle);
+ *   }
+ *   treeToggle.leaf = !model.item.hasChildren;
+ *   treeToggle.level = level;
+ *   treeToggle.expanded = expanded;
+ *   treeToggle.textContent = model.item.name;
+ * };
  * ```
  *
  * ### Styling
@@ -54,7 +65,7 @@ export interface GridTreeToggleEventMap extends HTMLElementEventMap, GridTreeTog
  *
  * @fires {CustomEvent} expanded-changed - Fired when the `expanded` property changes.
  */
-declare class GridTreeToggleElement extends ThemableMixin(HTMLElement) {
+declare class GridTreeToggle extends ThemableMixin(DirMixin(HTMLElement)) {
   /**
    * Current level of the tree represented with a horizontal offset
    * of the toggle button.
@@ -73,21 +84,21 @@ declare class GridTreeToggleElement extends ThemableMixin(HTMLElement) {
 
   addEventListener<K extends keyof GridTreeToggleEventMap>(
     type: K,
-    listener: (this: GridTreeToggleElement, ev: GridTreeToggleEventMap[K]) => void,
-    options?: boolean | AddEventListenerOptions
+    listener: (this: GridTreeToggle, ev: GridTreeToggleEventMap[K]) => void,
+    options?: AddEventListenerOptions | boolean,
   ): void;
 
   removeEventListener<K extends keyof GridTreeToggleEventMap>(
     type: K,
-    listener: (this: GridTreeToggleElement, ev: GridTreeToggleEventMap[K]) => void,
-    options?: boolean | EventListenerOptions
+    listener: (this: GridTreeToggle, ev: GridTreeToggleEventMap[K]) => void,
+    options?: EventListenerOptions | boolean,
   ): void;
 }
 
 declare global {
   interface HTMLElementTagNameMap {
-    'vaadin-grid-tree-toggle': GridTreeToggleElement;
+    'vaadin-grid-tree-toggle': GridTreeToggle;
   }
 }
 
-export { GridTreeToggleElement };
+export { GridTreeToggle };

@@ -1,15 +1,15 @@
 /**
  * @license
- * Copyright (c) 2020 Vaadin Ltd.
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
  * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
  */
-import { PolymerElement, html } from '@polymer/polymer/polymer-element.js';
+import { html, PolymerElement } from '@polymer/polymer/polymer-element.js';
+import { DirMixin } from '@vaadin/component-base/src/dir-mixin.js';
 import { ThemableMixin } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
-import { DirMixin } from '@vaadin/vaadin-element-mixin/vaadin-dir-mixin.js';
 
-const $_documentContainer = document.createElement('template');
+const template = document.createElement('template');
 
-$_documentContainer.innerHTML = `
+template.innerHTML = `
   <style>
     @font-face {
       font-family: 'vaadin-grid-sorter-icons';
@@ -20,7 +20,7 @@ $_documentContainer.innerHTML = `
   </style>
 `;
 
-document.head.appendChild($_documentContainer.content);
+document.head.appendChild(template.content);
 
 /**
  * `<vaadin-grid-sorter>` is a helper element for the `<vaadin-grid>` that provides out-of-the-box UI controls,
@@ -28,12 +28,18 @@ document.head.appendChild($_documentContainer.content);
  *
  * #### Example:
  * ```html
- * <vaadin-grid-column>
- *   <template class="header">
- *     <vaadin-grid-sorter path="name.first">First name</vaadin-grid-sorter>
- *   </template>
- *   <template>[[item.name.first]]</template>
- * </vaadin-grid-column>
+ * <vaadin-grid-column id="column"></vaadin-grid-column>
+ * ```
+ * ```js
+ * const column = document.querySelector('#column');
+ * column.renderer = (root, column, model) => {
+ *   let sorter = root.firstElementChild;
+ *   if (!sorter) {
+ *     sorter = document.createElement('vaadin-grid-sorter');
+ *     root.appendChild(sorter);
+ *   }
+ *   sorter.path = 'name.first';
+ * };
  * ```
  *
  * ### Styling
@@ -57,7 +63,7 @@ document.head.appendChild($_documentContainer.content);
  *
  * @extends HTMLElement
  */
-class GridSorterElement extends ThemableMixin(DirMixin(PolymerElement)) {
+class GridSorter extends ThemableMixin(DirMixin(PolymerElement)) {
   static get template() {
     return html`
       <style>
@@ -130,7 +136,7 @@ class GridSorterElement extends ThemableMixin(DirMixin(PolymerElement)) {
         type: String,
         reflectToAttribute: true,
         notify: true,
-        value: null
+        value: null,
       },
 
       /**
@@ -139,14 +145,14 @@ class GridSorterElement extends ThemableMixin(DirMixin(PolymerElement)) {
        */
       _order: {
         type: Number,
-        value: null
+        value: null,
       },
 
       /** @private */
       _isConnected: {
         type: Boolean,
-        observer: '__isConnectedChanged'
-      }
+        observer: '__isConnectedChanged',
+      },
     };
   }
 
@@ -170,6 +176,10 @@ class GridSorterElement extends ThemableMixin(DirMixin(PolymerElement)) {
   disconnectedCallback() {
     super.disconnectedCallback();
     this._isConnected = false;
+
+    if (!this.parentNode && this._grid) {
+      this._grid.__removeSorters([this]);
+    }
   }
 
   /** @private */
@@ -219,6 +229,6 @@ class GridSorterElement extends ThemableMixin(DirMixin(PolymerElement)) {
   }
 }
 
-customElements.define(GridSorterElement.is, GridSorterElement);
+customElements.define(GridSorter.is, GridSorter);
 
-export { GridSorterElement };
+export { GridSorter };

@@ -1,6 +1,6 @@
-import { registerStyles, css } from '@vaadin/vaadin-themable-mixin/register-styles.js';
 import '@vaadin/vaadin-material-styles/color.js';
 import '@vaadin/vaadin-material-styles/typography.js';
+import { css, registerStyles } from '@vaadin/vaadin-themable-mixin/vaadin-themable-mixin.js';
 
 registerStyles(
   'vaadin-grid',
@@ -11,6 +11,10 @@ registerStyles(
       font-size: var(--material-small-font-size);
       line-height: 20px;
       color: var(--material-body-text-color);
+    }
+
+    :host([disabled]) {
+      opacity: 0.7;
     }
 
     [part~='cell'] {
@@ -110,6 +114,10 @@ registerStyles(
       border-right: 1px solid var(--material-divider-color);
     }
 
+    [part~='cell'][first-frozen-to-end] {
+      border-left: 1px solid var(--material-divider-color);
+    }
+
     /* Column resizing */
 
     [part~='cell']:not([last-frozen]) [part='resize-handle'] {
@@ -118,12 +126,30 @@ registerStyles(
 
     /* Keyboard navigation */
 
+    [part~='row'] {
+      position: relative;
+    }
+
+    [part~='row']:focus,
     [part~='cell']:focus {
       outline: none;
     }
 
+    :host([navigating]) [part~='row']:focus::before,
     :host([navigating]) [part~='cell']:focus {
       box-shadow: inset 0 0 0 2px var(--material-primary-color);
+    }
+
+    :host([navigating]) [part~='row']:focus::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      pointer-events: none;
+      transform: translateX(calc(-1 * var(--_grid-horizontal-scroll-position)));
+      z-index: 3;
     }
 
     /* Drag and Drop styles */
@@ -165,6 +191,10 @@ registerStyles(
       margin-top: -1px;
     }
 
+    :host([all-rows-visible]) [part~='row'][last][dragover='below'] [part~='cell']::after {
+      height: 1px;
+    }
+
     [part~='row'][dragover='above'] [part~='cell']::after {
       top: auto;
       bottom: 100%;
@@ -182,8 +212,6 @@ registerStyles(
     }
 
     [part~='row'][dragstart] {
-      /* Add bottom-space to the row so the drag number doesn't get clipped. Needed for IE/Edge */
-      border-bottom: 100px solid transparent;
       z-index: 100 !important;
       opacity: 0.9;
     }
@@ -193,11 +221,7 @@ registerStyles(
       box-shadow: none !important;
     }
 
-    [ios] [part~='row'][dragstart] [part~='cell'] {
-      background: var(--material-primary-color);
-    }
-
-    #scroller:not([ios]) [part~='row'][dragstart]:not([dragstart=''])::after {
+    #scroller [part~='row'][dragstart]:not([dragstart=''])::after {
       display: block;
       position: absolute;
       left: var(--_grid-drag-start-x);
@@ -224,15 +248,20 @@ registerStyles(
       border-left: 1px solid var(--material-divider-color);
     }
 
+    :host([dir='rtl']) [part~='cell'][first-frozen-to-end] {
+      border-left: none;
+      border-right: 1px solid var(--material-divider-color);
+    }
+
     :host([dir='rtl']) [part~='cell']:not([last-frozen]) [part='resize-handle'] {
       border-right: none;
       border-left: 1px solid var(--material-divider-color);
     }
 
-    :host([dir='rtl']) #scroller:not([ios]) [part~='row'][dragstart]:not([dragstart=''])::after {
+    :host([dir='rtl']) #scroller [part~='row'][dragstart]:not([dragstart=''])::after {
       left: auto;
       right: var(--_grid-drag-start-x);
     }
   `,
-  { moduleId: 'material-grid' }
+  { moduleId: 'material-grid' },
 );

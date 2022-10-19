@@ -1,34 +1,77 @@
-import { GridDataProvider, GridItem } from './interfaces';
+/**
+ * @license
+ * Copyright (c) 2016 - 2022 Vaadin Ltd.
+ * This program is available under Apache License Version 2.0, available at https://vaadin.com/license/
+ */
+import type { Constructor } from '@open-wc/dedupe-mixin';
+import { GridSorterDirection } from './vaadin-grid-sorter.js';
 
-declare class ItemCache {
+export { GridSorterDirection };
+
+export interface GridFilterDefinition {
+  path: string;
+  value: string;
+}
+
+export interface GridSorterDefinition {
+  path: string;
+  direction: GridSorterDirection;
+}
+
+export type GridDataProviderCallback<TItem> = (items: TItem[], size?: number) => void;
+
+export type GridDataProviderParams<TItem> = {
+  page: number;
+  pageSize: number;
+  filters: GridFilterDefinition[];
+  sortOrders: GridSorterDefinition[];
+  parentItem?: TItem;
+};
+
+export type GridDataProvider<TItem> = (
+  params: GridDataProviderParams<TItem>,
+  callback: GridDataProviderCallback<TItem>,
+) => void;
+
+export declare class ItemCache<TItem> {
   grid: HTMLElement;
-  parentCache: ItemCache | undefined;
-  parentItem: GridItem | undefined;
+  parentCache: ItemCache<TItem> | undefined;
+  parentItem: TItem | undefined;
   itemCaches: object | null;
   items: object | null;
   effectiveSize: number;
   size: number;
   pendingRequests: object | null;
-  constructor(grid: HTMLElement, parentCache: ItemCache | undefined, parentItem: GridItem | undefined);
+
+  constructor(grid: HTMLElement, parentCache: ItemCache<TItem> | undefined, parentItem: TItem | undefined);
+
   isLoading(): boolean;
-  getItemForIndex(index: number): GridItem | undefined;
+
+  getItemForIndex(index: number): TItem | undefined;
+
   updateSize(): void;
+
   ensureSubCacheForScaledIndex(scaledIndex: number): void;
-  getCacheAndIndex(index: number): { cache: ItemCache; scaledIndex: number };
+
+  getCacheAndIndex(index: number): { cache: ItemCache<TItem>; scaledIndex: number };
 }
 
-declare function DataProviderMixin<T extends new (...args: any[]) => {}>(base: T): T & DataProviderMixinConstructor;
+export declare function DataProviderMixin<TItem, T extends Constructor<HTMLElement>>(
+  base: T,
+): Constructor<DataProviderMixinClass<TItem>> & T;
 
-interface DataProviderMixinConstructor {
-  new (...args: any[]): DataProviderMixin;
-}
-
-interface DataProviderMixin {
+export declare class DataProviderMixinClass<TItem> {
   /**
    * Number of items fetched at a time from the dataprovider.
    * @attr {number} page-size
    */
   pageSize: number;
+
+  /**
+   * The number of root-level items in the grid.
+   * @attr {number} size
+   */
+  size: number;
 
   /**
    * Function that provides items lazily. Receives arguments `params`, `callback`
@@ -51,14 +94,18 @@ interface DataProviderMixin {
    *     are requested, total number of items in the requested sublevel.
    *     Optional when tree is not used, required for tree.
    */
-  dataProvider: GridDataProvider | null | undefined;
+  dataProvider: GridDataProvider<TItem> | null | undefined;
 
   /**
    * `true` while data is being requested from the data provider.
    */
   readonly loading: boolean | null | undefined;
 
-  _cache: ItemCache;
+  /**
+   * Path to an item sub-property that indicates whether the item has child items.
+   * @attr {string} item-has-children-path
+   */
+  itemHasChildrenPath: string;
 
   /**
    * Path to an item sub-property that identifies the item.
@@ -69,46 +116,26 @@ interface DataProviderMixin {
   /**
    * An array that contains the expanded items.
    */
-  expandedItems: GridItem[];
-
-  _getItem(index: number, el: HTMLElement | null): void;
+  expandedItems: TItem[];
 
   /**
    * Returns a value that identifies the item. Uses `itemIdPath` if available.
    * Can be customized by overriding.
    */
-  getItemId(item: GridItem): GridItem | unknown;
-
-  _isExpanded(item: GridItem): boolean;
+  getItemId(item: TItem): TItem | unknown;
 
   /**
    * Expands the given item tree.
    */
-  expandItem(item: GridItem): void;
+  expandItem(item: TItem): void;
 
   /**
    * Collapses the given item tree.
    */
-  collapseItem(item: GridItem): void;
-
-  _getIndexLevel(index: number): number;
-
-  _canPopulate(): boolean;
-
-  _loadPage(page: number, cache: ItemCache | null): void;
+  collapseItem(item: TItem): void;
 
   /**
    * Clears the cached pages and reloads data from dataprovider when needed.
    */
   clearCache(): void;
-
-  _checkSize(): void;
-
-  _ensureFirstPageLoaded(): void;
-
-  _itemsEqual(item1: GridItem, item2: GridItem): boolean;
-
-  _getItemIndexInArray(item: GridItem, array: GridItem[]): number;
 }
-
-export { DataProviderMixin, DataProviderMixinConstructor, ItemCache };
